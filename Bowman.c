@@ -19,7 +19,7 @@ typedef struct{
     char *folder;
     char *ip;
     int port;
-}bowman;
+}Bowman;
 
 char * read_until(int fd, char end) {
 	char *string = NULL;
@@ -49,10 +49,10 @@ void main_menu(){
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
-    bowman bowman;
+    Bowman bowman;
 
     if (argc != 2) {
-        asprintf(&buffer, "ERROR: Expecting on parameter\n");
+        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
         write(1, buffer, strlen(buffer));
         free(buffer);
         return -1;
