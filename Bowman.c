@@ -8,11 +8,11 @@
 
 #define OPT_CONNECT "CONNECT"
 #define OPT_CHECK_DOWNLOADS "CHECK DOWNLOADS"
+#define OPT_LIST_SONGS "LIST SONGS"
 #define OPT_DOWNLOAD "DOWNLOAD"
 #define OPT_LIST_PLAYLISTS "LIST PLAYLISTS"
 #define OPT_LOGOUT "LOGOUT"
-
-int connected = 0;
+#define OPT_CLEAR_DOWNLOADS "CLEAR DOWNLOADS"
 
 typedef struct{
     char *name;
@@ -20,6 +20,9 @@ typedef struct{
     char *ip;
     int port;
 }Bowman;
+
+int connected = 0;
+Bowman bowman;
 
 char * read_until(int fd, char end) {
 	char *string = NULL;
@@ -42,14 +45,133 @@ char * read_until(int fd, char end) {
 	return string;
 }
 
-void main_menu(){
+void ksigint(){
+    exit(EXIT_SUCCESS);
+}
 
+void main_menu(){
+    char *printBuffer;
+    int inputLength;
+    char *input;
+    char *toDownload;
+    char buffer[100];
+
+    while(1){
+        int split = 0;
+        inputLength = read(STDIN_FILENO, buffer, 100);
+        buffer[inputLength - 1] = '\0';
+
+        if(inputLength > 0){
+            for(int i=0; i<inputLength; i++){
+                if(buffer[i] == ' '){
+                    //split = 1;
+                    break;
+                }
+            }
+
+            if(split){
+                input = strtok(buffer, " ");
+                toDownload = strtok(NULL, "\n");
+                printf("input: %s\n", input);
+                printf("toDownload: %s\n", toDownload);
+            }else{
+                input = (char *)malloc(inputLength);
+                strncpy(input, buffer, inputLength);
+                input[inputLength - 1] = '\0';
+            }
+        }
+
+        if(strcasecmp(input, OPT_CONNECT) == 0){
+            if(connected){
+                asprintf(&printBuffer, "%s is already connected.\n", bowman.name);
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }else{
+                connected = 1;
+                asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name);
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else if(strcasecmp(input, OPT_LOGOUT) == 0){
+            if(connected){
+
+            }else{
+                asprintf(&printBuffer, "Cannot Logout, you are not connected to HAL 9000\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else if(strcasecmp(input, OPT_LIST_SONGS) == 0){
+            if(connected){
+
+            }else{
+                asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else if(strcasecmp(input, OPT_LIST_PLAYLISTS) == 0){
+            if(connected){
+
+            }else{
+                asprintf(&printBuffer, "Cannot List Playlist, you are not connected to HAL 9000\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else if(strcasecmp(input, OPT_DOWNLOAD) == 0){
+            if(connected){
+
+            }else{
+                asprintf(&printBuffer, "Cannot Download, you are not connected to HAL 9000\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else if(strcasecmp(input, OPT_CHECK_DOWNLOADS) == 0){
+            if(connected){
+
+            }else{
+                asprintf(&printBuffer, "Cannot Check Downloads, you are not connected to HAL 9000\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else if(strcasecmp(input, OPT_CLEAR_DOWNLOADS) == 0){
+            if(connected){
+
+            }else{
+                asprintf(&printBuffer, "Cannot Clear Downloads, you are not connected to HAL 9000\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+            }
+        }
+
+        else{
+            asprintf(&printBuffer, "Invalid option.\n");
+            write(1, printBuffer, strlen(printBuffer));
+            free(printBuffer);
+        }
+    }
 }
 
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
-    Bowman bowman;
+    //Bowman bowman;
+
+    asprintf(&buffer, "\nPID: %d\n", getpid());
+    write(STDOUT_FILENO, buffer, strlen(buffer));
+    free(buffer);
+
+    signal(SIGINT, ksigint);
 
     if (argc != 2) {
         asprintf(&buffer, "ERROR: Expecting one parameter.\n");

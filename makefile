@@ -1,9 +1,5 @@
-# Makefile for compiling Bowman.c and Poole.c
-
-# Compiler
 CC = gcc
 
-# Compiler flags
 CFLAGS = -Wall -Wextra
 
 all: Bowman Poole

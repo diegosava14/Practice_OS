@@ -83,12 +83,5 @@ int main(int argc, char *argv[]){
     poole.portPoole = atoi(line);
     free(line);
 
-    printf("nameServer: %s\n", poole.nameServer);
-    printf("folder: %s\n", poole.folder);
-    printf("ipDiscovery: %s\n", poole.ipDiscovery);
-    printf("portDiscovery: %d\n", poole.portDiscovery);
-    printf("ipPoole: %s\n", poole.ipPoole);
-    printf("portPoole: %d\n", poole.portPoole);
-
     return 0;
 }
