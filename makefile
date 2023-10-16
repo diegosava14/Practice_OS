@@ -1,4 +1,4 @@
-# Makefile for compiling Bowman.c with specific flags
+# Makefile for compiling Bowman.c and Poole.c
 
 # Compiler
 CC = gcc
@@ -6,16 +6,13 @@ CC = gcc
 # Compiler flags
 CFLAGS = -Wall -Wextra
 
-# Target executable
-TARGET = Bowman
+all: Bowman Poole
 
-# Default rule
-all: $(TARGET)
+Bowman: Bowman.c
+	$(CC) Bowman.c -o Bowman $(CFLAGS)
 
-# Rule to compile Bowman.c
-$(TARGET): Bowman.c
-	$(CC) $< -o $@ $(CFLAGS)
+Poole: Poole.c
+	$(CC) Poole.c -o Poole $(CFLAGS)
 
-# Clean rule to remove the executable
 clean:
-	rm -f $(TARGET)
+	rm -f Bowman Poole
