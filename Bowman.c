@@ -46,6 +46,7 @@ char * read_until(int fd, char end) {
 }
 
 void ksigint(){
+    write(1, "\n", 1);
     exit(EXIT_SUCCESS);
 }
 
@@ -53,27 +54,35 @@ void main_menu(){
     char *printBuffer;
     int inputLength;
     char *input;
-    char *toDownload;
+    //char *toDownload;  **Commented because as it's not being used, it's giving a warning**
+    char *aux;
+    char *bufferAux;
     char buffer[100];
 
     while(1){
         int split = 0;
+        write(1, "$ ", 2);
+
         inputLength = read(STDIN_FILENO, buffer, 100);
         buffer[inputLength - 1] = '\0';
+
+        bufferAux = malloc(sizeof(char) * (inputLength));
+        strcpy(bufferAux, buffer);
 
         if(inputLength > 0){
             for(int i=0; i<inputLength; i++){
                 if(buffer[i] == ' '){
-                    //split = 1;
-                    break;
+                    aux = strtok(bufferAux, " ");
+                    if(aux != NULL && strcasecmp(aux, OPT_DOWNLOAD) == 0){
+                        split = 1;
+                        break;
+                    }
                 }
             }
 
             if(split){
                 input = strtok(buffer, " ");
-                toDownload = strtok(NULL, "\n");
-                printf("input: %s\n", input);
-                printf("toDownload: %s\n", toDownload);
+                //toDownload = strtok(NULL, "\n");  **Commented because as it's not being used, it's giving a warning**
             }else{
                 input = (char *)malloc(inputLength);
                 strncpy(input, buffer, inputLength);
@@ -165,6 +174,7 @@ void main_menu(){
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
+    int numAmpersand = 0;
     //Bowman bowman;
 
     asprintf(&buffer, "\nPID: %d\n", getpid());
@@ -188,7 +198,18 @@ int main(int argc, char *argv[]){
     }
 
     line = read_until(fd_bowman, '\n');
-    bowman.name = malloc(sizeof(char) * (strlen(line) + 1));
+    size_t length = strlen(line);
+
+    for (size_t i = 0; i < length; i++) {
+        if (line[i] == '&') {
+            numAmpersand++;
+        } else {
+            line[i - numAmpersand] = line[i];
+        }
+    }
+
+    line[length - numAmpersand] = '\0';
+    bowman.name = malloc(sizeof(char) * (length - numAmpersand + 1));
     strcpy(bowman.name, line);
     free(line);
 
