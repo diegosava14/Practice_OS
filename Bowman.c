@@ -177,9 +177,9 @@ int main(int argc, char *argv[]){
     int numAmpersand = 0;
     //Bowman bowman;
 
-    asprintf(&buffer, "\nPID: %d\n", getpid());
-    write(STDOUT_FILENO, buffer, strlen(buffer));
-    free(buffer);
+    // asprintf(&buffer, "\nPID: %d\n", getpid());
+    // write(STDOUT_FILENO, buffer, strlen(buffer));
+    // free(buffer);
 
     signal(SIGINT, ksigint);
 
@@ -231,6 +231,8 @@ int main(int argc, char *argv[]){
     asprintf(&buffer, "\n%s user initialized.\n", bowman.name);
     write(1, buffer, strlen(buffer));
     free(buffer);
+
+    close(fd_bowman);
 
     main_menu();
     return 0;

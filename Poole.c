@@ -51,7 +51,7 @@ int main(int argc, char *argv[]){
     int fd_poole = open(argv[1], O_RDONLY);
 
     if(fd_poole == -1){
-        perror("Error opening bowman file");
+        perror("Error opening poole file");
         exit(EXIT_FAILURE);
     }
 
@@ -82,6 +82,8 @@ int main(int argc, char *argv[]){
     line = read_until(fd_poole, '\n');
     poole.portPoole = atoi(line);
     free(line);
+
+    close(fd_poole);
 
     return 0;
 }
