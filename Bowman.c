@@ -54,7 +54,7 @@ void main_menu(){
     char *printBuffer;
     int inputLength;
     char *input;
-    //char *toDownload;  **Commented because as it's not being used, it's giving a warning**
+    char *toDownload;
     char *aux;
     char *bufferAux;
     char buffer[100];
@@ -82,7 +82,7 @@ void main_menu(){
 
             if(split){
                 input = strtok(buffer, " ");
-                //toDownload = strtok(NULL, "\n");  **Commented because as it's not being used, it's giving a warning**
+                toDownload = strtok(NULL, "\n");
             }else{
                 input = (char *)malloc(inputLength);
                 strncpy(input, buffer, inputLength);
@@ -133,7 +133,7 @@ void main_menu(){
             }
         }
 
-        else if(strcasecmp(input, OPT_DOWNLOAD) == 0){
+        else if((strcasecmp(input, OPT_DOWNLOAD) == 0)&&(toDownload != NULL)){
             if(connected){
 
             }else{
@@ -177,9 +177,9 @@ int main(int argc, char *argv[]){
     int numAmpersand = 0;
     //Bowman bowman;
 
-    // asprintf(&buffer, "\nPID: %d\n", getpid());
-    // write(STDOUT_FILENO, buffer, strlen(buffer));
-    // free(buffer);
+    asprintf(&buffer, "\nPID: %d\n", getpid());
+    write(STDOUT_FILENO, buffer, strlen(buffer));
+    free(buffer);
 
     signal(SIGINT, ksigint);
 
@@ -211,28 +211,50 @@ int main(int argc, char *argv[]){
     line[length - numAmpersand] = '\0';
     bowman.name = malloc(sizeof(char) * (length - numAmpersand + 1));
     strcpy(bowman.name, line);
+    bowman.name[length - numAmpersand] = '\0';
     free(line);
 
     line = read_until(fd_bowman, '\n');
     bowman.folder = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(bowman.folder, line);
+    bowman.folder[strlen(line)] = '\0';
     free(line);
 
     line = read_until(fd_bowman, '\n');
     bowman.ip = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(bowman.ip, line);
+    bowman.ip[strlen(line)] = '\0';
     free(line);
 
     line = read_until(fd_bowman, '\n');
     bowman.port = atoi(line);
     free(line);
     
+    close(fd_bowman);
 
     asprintf(&buffer, "\n%s user initialized.\n", bowman.name);
     write(1, buffer, strlen(buffer));
     free(buffer);
 
-    close(fd_bowman);
+    asprintf(&buffer, "\nFile read correctly: \n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "User - %s\n", bowman.name);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Directory - %s\n", bowman.folder);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "IP - %s\n", bowman.ip);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Port - %d\n\n", bowman.port);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
 
     main_menu();
     return 0;

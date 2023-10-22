@@ -48,6 +48,8 @@ int main(int argc, char *argv[]){
         return -1;
     }
 
+    //READING POOLE FILE
+
     int fd_poole = open(argv[1], O_RDONLY);
 
     if(fd_poole == -1){
@@ -58,16 +60,19 @@ int main(int argc, char *argv[]){
     line = read_until(fd_poole, '\n');
     poole.nameServer = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(poole.nameServer, line);
+    poole.nameServer[strlen(line)] = '\0';
     free(line);
 
     line = read_until(fd_poole, '\n');
     poole.folder = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(poole.folder, line);
+    poole.folder[strlen(line)] = '\0';
     free(line);
 
     line = read_until(fd_poole, '\n');
     poole.ipDiscovery = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(poole.ipDiscovery, line);
+    poole.ipDiscovery[strlen(line)] = '\0';
     free(line);
 
     line = read_until(fd_poole, '\n');
@@ -77,6 +82,7 @@ int main(int argc, char *argv[]){
     line = read_until(fd_poole, '\n');
     poole.ipPoole = malloc(sizeof(char) * (strlen(line) + 1));
     strcpy(poole.ipPoole, line);
+    poole.ipPoole[strlen(line)] = '\0';
     free(line);
 
     line = read_until(fd_poole, '\n');
@@ -84,6 +90,36 @@ int main(int argc, char *argv[]){
     free(line);
 
     close(fd_poole);
+
+    //PRINTING POOLE FILE
+
+    asprintf(&buffer, "\nFile read correctly:\n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Server name - %s\n", poole.nameServer);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Directory - %s\n", poole.folder);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Discovery IP - %s\n", poole.ipDiscovery);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Discovery port - %d\n", poole.portDiscovery);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Poole IP - %s\n", poole.ipPoole);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    asprintf(&buffer, "Poole port - %d\n", poole.portPoole);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
 
     return 0;
 }
