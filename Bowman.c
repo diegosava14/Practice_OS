@@ -7,12 +7,16 @@
 #include <fcntl.h>
 
 #define OPT_CONNECT "CONNECT"
-#define OPT_CHECK_DOWNLOADS "CHECK DOWNLOADS"
-#define OPT_LIST_SONGS "LIST SONGS"
+#define OPT_CHECK_DOWNLOADS1 "CHECK"
+#define OPT_CHECK_DOWNLOADS2 "DOWNLOADS"
+#define OPT_LIST_SONGS1 "LIST"
+#define OPT_LIST_SONGS2 "SONGS"
 #define OPT_DOWNLOAD "DOWNLOAD"
-#define OPT_LIST_PLAYLISTS "LIST PLAYLISTS"
+#define OPT_LIST_PLAYLISTS1 "LIST"
+#define OPT_LIST_PLAYLISTS2 "PLAYLISTS"
 #define OPT_LOGOUT "LOGOUT"
-#define OPT_CLEAR_DOWNLOADS "CLEAR DOWNLOADS"
+#define OPT_CLEAR_DOWNLOADS1 "CLEAR"
+#define OPT_CLEAR_DOWNLOADS2 "DOWNLOADS"
 
 typedef struct{
     char *name;
@@ -51,46 +55,36 @@ void ksigint(){
 }
 
 void main_menu(){
-    char *printBuffer;
     int inputLength;
-    char *input;
-    char *toDownload;
-    char *aux;
-    char *bufferAux;
+    char *printBuffer;
     char buffer[100];
 
-    while(1){
-        int split = 0;
+    while (1) {
+        int wordCount = 0;
+        int spaceCount = 0;
         write(1, "$ ", 2);
 
         inputLength = read(STDIN_FILENO, buffer, 100);
         buffer[inputLength - 1] = '\0';
 
-        bufferAux = malloc(sizeof(char) * (inputLength));
-        strcpy(bufferAux, buffer);
-
-        if(inputLength > 0){
-            for(int i=0; i<inputLength; i++){
-                if(buffer[i] == ' '){
-                    aux = strtok(bufferAux, " ");
-                    if(aux != NULL && strcasecmp(aux, OPT_DOWNLOAD) == 0){
-                        split = 1;
-                        break;
-                    }
+        if (inputLength > 0) {
+            for (int j = 0; j < inputLength; j++) {
+                if (buffer[j] == ' ') {
+                    spaceCount++;
                 }
-            }
-
-            if(split){
-                input = strtok(buffer, " ");
-                toDownload = strtok(NULL, "\n");
-            }else{
-                input = (char *)malloc(inputLength);
-                strncpy(input, buffer, inputLength);
-                input[inputLength - 1] = '\0';
             }
         }
 
-        if(strcasecmp(input, OPT_CONNECT) == 0){
+        char *tokens[spaceCount + 1];
+        char *token = strtok(buffer, " \t");
+
+        while (token != NULL && wordCount < spaceCount + 1) {
+            tokens[wordCount] = token;
+            token = strtok(NULL, " \t");
+            wordCount++;
+        }
+
+        if((strcasecmp(tokens[0], OPT_CONNECT) == 0)&&(wordCount == 1)){
             if(connected){
                 asprintf(&printBuffer, "%s is already connected.\n", bowman.name);
                 write(1, printBuffer, strlen(printBuffer));
@@ -103,7 +97,7 @@ void main_menu(){
             }
         }
 
-        else if(strcasecmp(input, OPT_LOGOUT) == 0){
+        else if((strcasecmp(tokens[0], OPT_LOGOUT) == 0)&&(wordCount == 1)){
             if(connected){
 
             }else{
@@ -113,7 +107,8 @@ void main_menu(){
             }
         }
 
-        else if(strcasecmp(input, OPT_LIST_SONGS) == 0){
+        else if((strcasecmp(tokens[0], OPT_LIST_SONGS1) == 0)&&(strcasecmp(tokens[1], OPT_LIST_SONGS2) == 0)
+        &&(wordCount == 2)){
             if(connected){
 
             }else{
@@ -123,7 +118,8 @@ void main_menu(){
             }
         }
 
-        else if(strcasecmp(input, OPT_LIST_PLAYLISTS) == 0){
+        else if((strcasecmp(tokens[0], OPT_LIST_PLAYLISTS1) == 0)&&(strcasecmp(tokens[1], OPT_LIST_PLAYLISTS2) == 0)
+        &&(wordCount == 2)){
             if(connected){
 
             }else{
@@ -133,7 +129,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(input, OPT_DOWNLOAD) == 0)&&(toDownload != NULL)){
+        else if((strcasecmp(tokens[0], OPT_DOWNLOAD) == 0)&&(wordCount == 2)){
             if(connected){
 
             }else{
@@ -143,7 +139,8 @@ void main_menu(){
             }
         }
 
-        else if(strcasecmp(input, OPT_CHECK_DOWNLOADS) == 0){
+        else if((strcasecmp(tokens[0], OPT_CHECK_DOWNLOADS1) == 0)&&(strcasecmp(tokens[1], OPT_CHECK_DOWNLOADS2) == 0)
+        &&(wordCount == 2)){
             if(connected){
 
             }else{
@@ -153,7 +150,8 @@ void main_menu(){
             }
         }
 
-        else if(strcasecmp(input, OPT_CLEAR_DOWNLOADS) == 0){
+        else if((strcasecmp(tokens[0], OPT_CLEAR_DOWNLOADS1) == 0)&&(strcasecmp(tokens[1], OPT_CLEAR_DOWNLOADS2) == 0)
+        &&(wordCount == 2)){
             if(connected){
 
             }else{
