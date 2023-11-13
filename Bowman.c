@@ -75,16 +75,16 @@ void main_menu(){
             }
         }
 
-        char *tokens[spaceCount + 1];
+        char *input[spaceCount + 1];
         char *token = strtok(buffer, " \t");
 
         while (token != NULL && wordCount < spaceCount + 1) {
-            tokens[wordCount] = token;
+            input[wordCount] = token;
             token = strtok(NULL, " \t");
             wordCount++;
         }
 
-        if((strcasecmp(tokens[0], OPT_CONNECT) == 0)&&(wordCount == 1)){
+        if((strcasecmp(input[0], OPT_CONNECT) == 0)&&(wordCount == 1)){
             if(connected){
                 asprintf(&printBuffer, "%s is already connected.\n", bowman.name);
                 write(1, printBuffer, strlen(printBuffer));
@@ -97,7 +97,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(tokens[0], OPT_LOGOUT) == 0)&&(wordCount == 1)){
+        else if((strcasecmp(input[0], OPT_LOGOUT) == 0)&&(wordCount == 1)){
             if(connected){
 
             }else{
@@ -107,7 +107,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(tokens[0], OPT_LIST_SONGS1) == 0)&&(strcasecmp(tokens[1], OPT_LIST_SONGS2) == 0)
+        else if((strcasecmp(input[0], OPT_LIST_SONGS1) == 0)&&(strcasecmp(input[1], OPT_LIST_SONGS2) == 0)
         &&(wordCount == 2)){
             if(connected){
 
@@ -118,7 +118,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(tokens[0], OPT_LIST_PLAYLISTS1) == 0)&&(strcasecmp(tokens[1], OPT_LIST_PLAYLISTS2) == 0)
+        else if((strcasecmp(input[0], OPT_LIST_PLAYLISTS1) == 0)&&(strcasecmp(input[1], OPT_LIST_PLAYLISTS2) == 0)
         &&(wordCount == 2)){
             if(connected){
 
@@ -129,7 +129,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(tokens[0], OPT_DOWNLOAD) == 0)&&(wordCount == 2)){
+        else if((strcasecmp(input[0], OPT_DOWNLOAD) == 0)&&(wordCount == 2)){
             if(connected){
 
             }else{
@@ -139,7 +139,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(tokens[0], OPT_CHECK_DOWNLOADS1) == 0)&&(strcasecmp(tokens[1], OPT_CHECK_DOWNLOADS2) == 0)
+        else if((strcasecmp(input[0], OPT_CHECK_DOWNLOADS1) == 0)&&(strcasecmp(input[1], OPT_CHECK_DOWNLOADS2) == 0)
         &&(wordCount == 2)){
             if(connected){
 
@@ -150,7 +150,7 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(tokens[0], OPT_CLEAR_DOWNLOADS1) == 0)&&(strcasecmp(tokens[1], OPT_CLEAR_DOWNLOADS2) == 0)
+        else if((strcasecmp(input[0], OPT_CLEAR_DOWNLOADS1) == 0)&&(strcasecmp(input[1], OPT_CLEAR_DOWNLOADS2) == 0)
         &&(wordCount == 2)){
             if(connected){
 
