@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 typedef struct{
     char *nameServer;
@@ -91,35 +94,48 @@ int main(int argc, char *argv[]){
 
     close(fd_poole);
 
-    //PRINTING POOLE FILE
+    //SOCKETS
 
-    asprintf(&buffer, "\nFile read correctly:\n");
-    write(1, buffer, strlen(buffer));
-    free(buffer);
+    uint16_t port;
+    int aux = poole.portDiscovery;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
 
-    asprintf(&buffer, "Server name - %s\n", poole.nameServer);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
+    struct in_addr ip_addr;
+    if (inet_aton (poole.ipDiscovery, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
+    }
 
-    asprintf(&buffer, "Directory - %s\n", poole.folder);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
+    // Create the socket
+    int sockfd;
+    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
 
-    asprintf(&buffer, "Discovery IP - %s\n", poole.ipDiscovery);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
 
-    asprintf(&buffer, "Discovery port - %d\n", poole.portDiscovery);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
+    // We can connect to the server casting the struct:
+    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
+    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
 
-    asprintf(&buffer, "Poole IP - %s\n", poole.ipPoole);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
-    asprintf(&buffer, "Poole port - %d\n", poole.portPoole);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
+    close(sockfd);
 
     return 0;
 }
