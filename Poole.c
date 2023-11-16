@@ -9,6 +9,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#define HEADER_NEW_POOLE "NEW_POOLE"
+
+
 typedef struct{
     char *nameServer;
     char *folder;
@@ -17,6 +20,13 @@ typedef struct{
     char *ipPoole;
     int portPoole;
 }Poole;
+
+typedef struct{
+    uint8_t type;
+    uint16_t headerLength;
+    char *header;
+    char *data;
+}Frame; 
 
 char * read_until(int fd, char end) {
 	char *string = NULL;
@@ -134,6 +144,35 @@ int main(int argc, char *argv[]){
         perror ("connect");
         exit (EXIT_FAILURE);
     }
+ 
+    Frame connectFrame;
+    char *data;
+
+    //Type
+    connectFrame.type = 0x01;
+
+    //Header Length
+    connectFrame.headerLength = sizeof(HEADER_NEW_POOLE)+1;
+
+    //Header
+    connectFrame.header = malloc(sizeof(char) * (connectFrame.headerLength));
+    strcpy(connectFrame.header, HEADER_NEW_POOLE);
+    connectFrame.header[connectFrame.headerLength-1] = '\0';
+
+    //Data
+    asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
+    connectFrame.data = malloc(sizeof(char) * strlen(data) + 1);
+    strcpy(connectFrame.data, data);
+    connectFrame.data[strlen(data)] = '\0';
+
+    //Padding
+    //uint16_t calculatedPadding = 256 - sizeof(uint8_t) - sizeof(uint16_t) - 
+    //    (strlen(HEADER_NEW_POOLE) + 1) - (strlen(data) + 1);
+
+
+    printf("Total size: %zu\n", sizeof(connectFrame));
+
+    //write(sockfd, &connectFrame, sizeof(connectFrame));
 
     close(sockfd);
 

@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include <strings.h>
 
+//PooleServer **servers;
+//int num_servers = 0;
+
 typedef struct{
     char *ipPoole;
     int portPoole;
@@ -24,6 +27,13 @@ typedef struct{
     char *ip;
     int port;
 }PooleServer; 
+
+typedef struct{
+    uint8_t type;
+    uint16_t headerLength;
+    char *header;
+    char *data;
+}Frame; 
 
 char * read_until(int fd, char end) {
 	char *string = NULL;
@@ -46,63 +56,64 @@ char * read_until(int fd, char end) {
 	return string;
 }
 
-void *discovery_poole(void *arg){
-    Discovery *discovery = (Discovery*)arg;
-    //PooleServer **servers;
-    //int num_servers = 0;
+void *discovery_poole(void *arg) {
+    Discovery *discovery = (Discovery *)arg;
 
     uint16_t port;
     int aux = discovery->portPoole;
-    if (aux < 1 || aux > 65535)
-    {
-        perror ("port");
-        exit (EXIT_FAILURE);
+    if (aux < 1 || aux > 65535) {
+        perror("port");
+        exit(EXIT_FAILURE);
     }
     port = aux;
 
     int sockfd;
-    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
-    {
-        perror ("socket TCP");
-        exit (EXIT_FAILURE);
+    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0) {
+        perror("socket TCP");
+        exit(EXIT_FAILURE);
     }
 
     struct sockaddr_in s_addr;
-    bzero (&s_addr, sizeof (s_addr));
+    bzero(&s_addr, sizeof(s_addr));
     s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons (port);
+    s_addr.sin_port = htons(port);
     s_addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
-    {
-        perror ("bind");
-        exit (EXIT_FAILURE);
+    if (bind(sockfd, (void *)&s_addr, sizeof(s_addr)) < 0) {
+        perror("bind");
+        exit(EXIT_FAILURE);
     }
 
-    listen (sockfd, 5);
+    listen(sockfd, 5);
 
-   //while(1){
-        struct sockaddr_in c_addr;
-        socklen_t c_len = sizeof (c_addr);
+    struct sockaddr_in c_addr;
+    socklen_t c_len = sizeof(c_addr);
 
-        printf ("Waiting for connections on port %hu\n", ntohs (s_addr.sin_port));
-        int newsock = accept (sockfd, (void *) &c_addr, &c_len);
-        if (newsock < 0)
-        {
-            perror ("accept");
-            exit (EXIT_FAILURE);
-        }
+    printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
+    int newsock = accept(sockfd, (void *)&c_addr, &c_len);
+    if (newsock < 0) {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
 
-        printf ("New connection from %s:%hu\n",
-        inet_ntoa (c_addr.sin_addr), ntohs (c_addr.sin_port));
+    printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
 
-        close (newsock);
-    //}
+    /*
+    Frame *newFrame = malloc(sizeof(Frame));
+    read(newsock, &newFrame, 24);
+    printf("%s\n", newFrame->data);
+    free(newFrame);*/
+
+    close(newsock);
 
     close(sockfd);
 
     return NULL;
+}
+
+void newFramePoole(){
+
 }
 
 void *discovery_bowman(void *arg){
@@ -171,6 +182,9 @@ int main(int argc, char *argv[]){
         perror("Error creating thread");
         exit(EXIT_FAILURE);
     }
+
+    free(discovery.ipPoole);
+    free(discovery.ipBowman);
 
     for(int i = 0; i < 2; i++){
         pthread_join(thread_ids[i], NULL);
