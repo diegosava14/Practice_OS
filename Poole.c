@@ -10,7 +10,8 @@
 #include <sys/socket.h>
 
 #define HEADER_NEW_POOLE "NEW_POOLE"
-
+#define HEADER_CON_OK "CON_OK"
+#define HEADER_CON_KO "CON_KO"
 
 typedef struct{
     char *nameServer;
@@ -47,6 +48,40 @@ char * read_until(int fd, char end) {
 	}
 	string[i] = '\0';
 	return string;
+}
+
+void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data){
+    char message[256]; 
+    headerLength ++;
+
+    message[0] = type;
+
+    message[1] = headerLength & 0xFF;
+    message[2] = (headerLength >> 8) & 0xFF;
+
+    memcpy(&message[3], constantHeader, strlen(constantHeader));
+    message[3 + strlen(constantHeader)] = '\0';
+
+    memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
+    message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
+
+    write(sockfd, message, 256);
+}
+
+Frame frameTranslation(char message[256]){
+    Frame frame;
+
+    frame.type = message[0];
+
+    frame.headerLength = (message[2] << 8) | message[1];
+
+    frame.header = malloc(frame.headerLength + 1);
+    strncpy(frame.header, &message[3], frame.headerLength);
+    frame.header[frame.headerLength] = '\0';
+
+    frame.data = strdup(&message[3 + frame.headerLength]);
+
+    return frame;
 }
 
 int main(int argc, char *argv[]){
@@ -145,34 +180,10 @@ int main(int argc, char *argv[]){
         exit (EXIT_FAILURE);
     }
  
-    Frame connectFrame;
     char *data;
-
-    //Type
-    connectFrame.type = 0x01;
-
-    //Header Length
-    connectFrame.headerLength = sizeof(HEADER_NEW_POOLE)+1;
-
-    //Header
-    connectFrame.header = malloc(sizeof(char) * (connectFrame.headerLength));
-    strcpy(connectFrame.header, HEADER_NEW_POOLE);
-    connectFrame.header[connectFrame.headerLength-1] = '\0';
-
-    //Data
     asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
-    connectFrame.data = malloc(sizeof(char) * strlen(data) + 1);
-    strcpy(connectFrame.data, data);
-    connectFrame.data[strlen(data)] = '\0';
-
-    //Padding
-    //uint16_t calculatedPadding = 256 - sizeof(uint8_t) - sizeof(uint16_t) - 
-    //    (strlen(HEADER_NEW_POOLE) + 1) - (strlen(data) + 1);
-
-
-    printf("Total size: %zu\n", sizeof(connectFrame));
-
-    //write(sockfd, &connectFrame, sizeof(connectFrame));
+    sendMessage(sockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
+    free(data);
 
     close(sockfd);
 

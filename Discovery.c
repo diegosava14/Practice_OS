@@ -12,6 +12,10 @@
 #include <stdint.h>
 #include <strings.h>
 
+#define HEADER_NEW_POOLE "NEW_POOLE"
+#define HEADER_CON_OK "CON_OK"
+#define HEADER_CON_KO "CON_KO"
+
 //PooleServer **servers;
 //int num_servers = 0;
 
@@ -56,6 +60,88 @@ char * read_until(int fd, char end) {
 	return string;
 }
 
+char *read_until_string(const char *str, char end) {
+    char *string = NULL;
+    char c;
+    int i = 0;
+
+    while (1) {
+        c = str[i++];
+        if (c != end && c != '\0') {
+            string = (char *)realloc(string, sizeof(char) * (i + 1));
+            string[i - 1] = c;
+        } else {
+            break;
+        }
+    }
+    string[i - 1] = '\0';
+    return string;
+}
+
+
+void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data){
+    char message[256]; 
+
+    message[0] = type;
+
+    message[1] = headerLength & 0xFF;
+    message[2] = (headerLength >> 8) & 0xFF;
+
+    memcpy(&message[3], constantHeader, strlen(constantHeader));
+    message[3 + strlen(constantHeader)] = '\0';
+
+    memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
+    message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
+
+    write(sockfd, message, 256);
+}
+
+Frame frameTranslation(char message[256]){
+    Frame frame;
+
+    frame.type = message[0];
+
+    frame.headerLength = (message[2] << 8) | message[1];
+
+    frame.header = malloc(frame.headerLength + 1);
+    strncpy(frame.header, &message[3], frame.headerLength);
+    frame.header[frame.headerLength] = '\0';
+
+    frame.data = strdup(&message[3 + frame.headerLength]);
+
+    return frame;
+}
+
+void pooleMenu(Frame frame){
+    if(strcmp(frame.header, HEADER_NEW_POOLE) == 0){
+        //num_servers ++;
+        PooleServer newServer;
+        
+        int i = 0;
+        char *info[3];
+        char *token = strtok(frame.data, "&");
+
+        while (token != NULL) {
+            info[i] = token;
+            i++;
+            token = strtok(NULL, "&");
+        }
+
+        newServer.name = strdup(info[0]);
+        newServer.ip = strdup(info[1]);
+        newServer.port = atoi(info[2]);
+
+        //servers = realloc(servers, sizeof(PooleServer) * (num_servers));
+        //servers[num_servers - 1] = &newServer;
+
+        printf("New poole server: %s %s %d\n", newServer.name, newServer.ip, newServer.port);
+    }else if(strcmp(frame.header, HEADER_CON_OK) == 0){
+        printf("Connection accepted\n");
+    }else if(strcmp(frame.header, HEADER_CON_KO) == 0){
+        printf("Connection refused\n");
+    }
+}
+
 void *discovery_poole(void *arg) {
     Discovery *discovery = (Discovery *)arg;
 
@@ -87,25 +173,28 @@ void *discovery_poole(void *arg) {
 
     listen(sockfd, 5);
 
-    struct sockaddr_in c_addr;
-    socklen_t c_len = sizeof(c_addr);
+    while(1){
+        struct sockaddr_in c_addr;
+        socklen_t c_len = sizeof(c_addr);
 
-    printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
-    int newsock = accept(sockfd, (void *)&c_addr, &c_len);
-    if (newsock < 0) {
-        perror("accept");
-        exit(EXIT_FAILURE);
+        printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
+        int newsock = accept(sockfd, (void *)&c_addr, &c_len);
+        if (newsock < 0) {
+            perror("accept");
+            exit(EXIT_FAILURE);
+        }
+
+        printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
+        
+        char frameIn[256];
+        read(newsock, &frameIn, 256);
+        
+        Frame frame = frameTranslation(frameIn);
+        
+        pooleMenu(frame);
+
+        close(newsock);
     }
-
-    printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
-
-    /*
-    Frame *newFrame = malloc(sizeof(Frame));
-    read(newsock, &newFrame, 24);
-    printf("%s\n", newFrame->data);
-    free(newFrame);*/
-
-    close(newsock);
 
     close(sockfd);
 
