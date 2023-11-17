@@ -13,11 +13,9 @@
 #include <strings.h>
 
 #define HEADER_NEW_POOLE "NEW_POOLE"
+#define HEADER_NEW_BOWMAN "NEW_BOWMAN"
 #define HEADER_CON_OK "CON_OK"
 #define HEADER_CON_KO "CON_KO"
-
-//PooleServer **servers;
-//int num_servers = 0;
 
 typedef struct{
     char *ipPoole;
@@ -30,6 +28,7 @@ typedef struct{
     char *name;
     char *ip;
     int port;
+    int connnections;
 }PooleServer; 
 
 typedef struct{
@@ -38,6 +37,9 @@ typedef struct{
     char *header;
     char *data;
 }Frame; 
+
+PooleServer **servers;
+int num_servers = 0;
 
 char * read_until(int fd, char end) {
 	char *string = NULL;
@@ -59,25 +61,6 @@ char * read_until(int fd, char end) {
 	string[i] = '\0';
 	return string;
 }
-
-char *read_until_string(const char *str, char end) {
-    char *string = NULL;
-    char c;
-    int i = 0;
-
-    while (1) {
-        c = str[i++];
-        if (c != end && c != '\0') {
-            string = (char *)realloc(string, sizeof(char) * (i + 1));
-            string[i - 1] = c;
-        } else {
-            break;
-        }
-    }
-    string[i - 1] = '\0';
-    return string;
-}
-
 
 void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data){
     char message[256]; 
@@ -107,15 +90,31 @@ Frame frameTranslation(char message[256]){
     strncpy(frame.header, &message[3], frame.headerLength);
     frame.header[frame.headerLength] = '\0';
 
-    frame.data = strdup(&message[3 + frame.headerLength]);
+    if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0){
+        frame.data = NULL;
+        return frame;
+    }else{
+        frame.data = strdup(&message[3 + frame.headerLength]);
+    }
 
     return frame;
 }
 
-void pooleMenu(Frame frame){
+Frame receiveMessage(int sockfd){
+    char message[256];
+    int size = read(sockfd, message, 256);
+    if(size == 0){
+        Frame frame;
+        frame.type = 0;
+        return frame;
+    }
+    return frameTranslation(message);
+}
+
+void pooleMenu(Frame frame, int sockfd){
     if(strcmp(frame.header, HEADER_NEW_POOLE) == 0){
-        //num_servers ++;
-        PooleServer newServer;
+        PooleServer *newServer;
+        newServer = malloc(sizeof(PooleServer));
         
         int i = 0;
         char *info[3];
@@ -127,18 +126,17 @@ void pooleMenu(Frame frame){
             token = strtok(NULL, "&");
         }
 
-        newServer.name = strdup(info[0]);
-        newServer.ip = strdup(info[1]);
-        newServer.port = atoi(info[2]);
+        newServer->name = strdup(info[0]);
+        newServer->ip = strdup(info[1]);
+        newServer->port = atoi(info[2]);
+        newServer->connnections = 0;
 
-        //servers = realloc(servers, sizeof(PooleServer) * (num_servers));
-        //servers[num_servers - 1] = &newServer;
+        servers = realloc(servers, sizeof(PooleServer) * (num_servers + 1));
+        servers[num_servers] = newServer;
+        num_servers++;
 
-        printf("New poole server: %s %s %d\n", newServer.name, newServer.ip, newServer.port);
-    }else if(strcmp(frame.header, HEADER_CON_OK) == 0){
-        printf("Connection accepted\n");
-    }else if(strcmp(frame.header, HEADER_CON_KO) == 0){
-        printf("Connection refused\n");
+        printf("New poole server: %s %s %d\n", newServer->name, newServer->ip, newServer->port);
+        sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, "");
     }
 }
 
@@ -186,12 +184,9 @@ void *discovery_poole(void *arg) {
 
         printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
         
-        char frameIn[256];
-        read(newsock, &frameIn, 256);
+        Frame frame = receiveMessage(newsock);
         
-        Frame frame = frameTranslation(frameIn);
-        
-        pooleMenu(frame);
+        pooleMenu(frame, newsock);
 
         close(newsock);
     }
@@ -201,14 +196,82 @@ void *discovery_poole(void *arg) {
     return NULL;
 }
 
-void newFramePoole(){
+void bowmanMenu(Frame frame, int sockfd){
+    if(strcmp(frame.header, HEADER_NEW_BOWMAN) == 0){
+        printf("New Bowman server: %s\n", frame.data);
 
+        int min = servers[0]->connnections;
+        int index = 0;
+
+        for(int i=0; i<num_servers; i++){
+            if(servers[i]->connnections < min){
+                min = servers[i]->connnections;
+                index = i;
+            }
+        }
+
+        servers[index]->connnections++;
+        char *data;
+        asprintf(&data, "%s&%s&%d", servers[index]->name, servers[index]->ip, servers[index]->port);
+        printf("Sending %s to bowman\n", data);
+        sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, data);
+        free(data);
+    }
 }
 
 void *discovery_bowman(void *arg){
     Discovery *discovery = (Discovery*)arg;
+    
+    uint16_t port;
     int aux = discovery->portBowman;
-    aux --;
+    if (aux < 1 || aux > 65535) {
+        perror("port");
+        exit(EXIT_FAILURE);
+    }
+    port = aux;
+
+    int sockfd;
+    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0) {
+        perror("socket TCP");
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero(&s_addr, sizeof(s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons(port);
+    s_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sockfd, (void *)&s_addr, sizeof(s_addr)) < 0) {
+        perror("bind");
+        exit(EXIT_FAILURE);
+    }
+
+    listen(sockfd, 5);
+
+    while(1){
+        struct sockaddr_in c_addr;
+        socklen_t c_len = sizeof(c_addr);
+
+        printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
+        int newsock = accept(sockfd, (void *)&c_addr, &c_len);
+        if (newsock < 0) {
+            perror("accept");
+            exit(EXIT_FAILURE);
+        }
+
+        printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
+        
+        Frame frame = receiveMessage(newsock);
+
+        bowmanMenu(frame, newsock);
+
+        close(newsock);
+    }
+
+    close(sockfd);
+
     return NULL;
 }
 

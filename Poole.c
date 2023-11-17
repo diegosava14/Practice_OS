@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 
 #define HEADER_NEW_POOLE "NEW_POOLE"
+#define HEADER_NEW_BOWMAN "NEW_BOWMAN"
 #define HEADER_CON_OK "CON_OK"
 #define HEADER_CON_KO "CON_KO"
 
@@ -79,9 +80,80 @@ Frame frameTranslation(char message[256]){
     strncpy(frame.header, &message[3], frame.headerLength);
     frame.header[frame.headerLength] = '\0';
 
-    frame.data = strdup(&message[3 + frame.headerLength]);
+    if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0){
+        frame.data = NULL;
+        return frame;
+    }else{
+        frame.data = strdup(&message[3 + frame.headerLength]);
+    }
 
     return frame;
+}
+
+Frame receiveMessage(int sockfd){
+    char message[256];
+    int size = read(sockfd, message, 256);
+    if(size == 0){
+        Frame frame;
+        frame.type = 0;
+        return frame;
+    }
+    return frameTranslation(message);
+}
+
+void connectToDiscovery(Poole poole){
+    uint16_t port;
+    int aux = poole.portDiscovery;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
+
+    struct in_addr ip_addr;
+    if (inet_aton (poole.ipDiscovery, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
+    }
+
+    // Create the socket
+    int sockfd;
+    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
+
+    // We can connect to the server casting the struct:
+    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
+    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
+ 
+    char *data;
+    asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
+    sendMessage(sockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
+    free(data);
+
+    Frame frame = receiveMessage(sockfd);
+    if(strcmp(frame.header, HEADER_CON_OK) == 0){
+        printf("Connection accepted\n");
+        close(sockfd);
+    }else{
+        printf("Connection refused\n");
+        close(sockfd);
+    }
 }
 
 int main(int argc, char *argv[]){
@@ -141,51 +213,7 @@ int main(int argc, char *argv[]){
 
     //SOCKETS
 
-    uint16_t port;
-    int aux = poole.portDiscovery;
-    if (aux < 1 || aux > 65535)
-    {
-        perror ("port");
-        exit (EXIT_FAILURE);
-    }
-    port = aux;
-
-    struct in_addr ip_addr;
-    if (inet_aton (poole.ipDiscovery, &ip_addr) == 0)
-    {
-        perror ("inet_aton");
-        exit (EXIT_FAILURE);
-    }
-
-    // Create the socket
-    int sockfd;
-    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
-    {
-        perror ("socket TCP");
-        exit (EXIT_FAILURE);
-    }
-
-    struct sockaddr_in s_addr;
-    bzero (&s_addr, sizeof (s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons (port);
-    s_addr.sin_addr = ip_addr;
-
-    // We can connect to the server casting the struct:
-    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
-    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
-    {
-        perror ("connect");
-        exit (EXIT_FAILURE);
-    }
- 
-    char *data;
-    asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
-    sendMessage(sockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
-    free(data);
-
-    close(sockfd);
+    connectToDiscovery(poole);
 
     return 0;
 }

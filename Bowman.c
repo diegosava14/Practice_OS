@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 #define OPT_CONNECT "CONNECT"
 #define OPT_CHECK_DOWNLOADS1 "CHECK"
@@ -18,6 +21,11 @@
 #define OPT_CLEAR_DOWNLOADS1 "CLEAR"
 #define OPT_CLEAR_DOWNLOADS2 "DOWNLOADS"
 
+#define HEADER_NEW_POOLE "NEW_POOLE"
+#define HEADER_NEW_BOWMAN "NEW_BOWMAN"
+#define HEADER_CON_OK "CON_OK"
+#define HEADER_CON_KO "CON_KO"
+
 typedef struct{
     char *name;
     char *folder;
@@ -25,8 +33,18 @@ typedef struct{
     int port;
 }Bowman;
 
-int connected = 0;
-Bowman bowman;
+typedef struct{
+    char *name;
+    char *ip;
+    int port;
+}PooleToConnect; 
+
+typedef struct{
+    uint8_t type;
+    uint16_t headerLength;
+    char *header;
+    char *data;
+}Frame; 
 
 char * read_until(int fd, char end) {
 	char *string = NULL;
@@ -49,12 +67,167 @@ char * read_until(int fd, char end) {
 	return string;
 }
 
+void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data){
+    char message[256]; 
+
+    message[0] = type;
+
+    message[1] = headerLength & 0xFF;
+    message[2] = (headerLength >> 8) & 0xFF;
+
+    memcpy(&message[3], constantHeader, strlen(constantHeader));
+    message[3 + strlen(constantHeader)] = '\0';
+
+    memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
+    message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
+
+    write(sockfd, message, 256);
+}
+
+Frame frameTranslation_CON_OK_Discovery(char message[256]){
+    Frame frame;
+
+    frame.type = message[0];
+
+    frame.headerLength = (message[2] << 8) | message[1];
+
+    frame.header = malloc(frame.headerLength + 1);
+    strncpy(frame.header, &message[3], frame.headerLength);
+    frame.header[frame.headerLength] = '\0';
+
+    frame.data = strdup(&message[3 + frame.headerLength]);
+
+    return frame;
+}
+
+Frame receiveMessage_CON_OK_Discovery(int sockfd){
+    char message[256];
+    int size = read(sockfd, message, 256);
+    if(size == 0){
+        Frame frame;
+        frame.type = 0;
+        return frame;
+    }
+    return frameTranslation_CON_OK_Discovery(message);
+}
+
+Frame frameTranslation(char message[256]){
+    Frame frame;
+
+    frame.type = message[0];
+
+    frame.headerLength = (message[2] << 8) | message[1];
+
+    frame.header = malloc(frame.headerLength + 1);
+    strncpy(frame.header, &message[3], frame.headerLength);
+    frame.header[frame.headerLength] = '\0';
+
+    if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0){
+        frame.data = NULL;
+        return frame;
+    }else{
+        frame.data = strdup(&message[3 + frame.headerLength]);
+    }
+
+    return frame;
+}
+
+Frame receiveMessage(int sockfd){
+    char message[256];
+    int size = read(sockfd, message, 256);
+    if(size == 0){
+        Frame frame;
+        frame.type = 0;
+        return frame;
+    }
+    return frameTranslation(message);
+}
+
 void ksigint(){
     write(1, "\n", 1);
     exit(EXIT_SUCCESS);
 }
 
-void main_menu(){
+PooleToConnect connectToDiscovery(Bowman bowman){
+    PooleToConnect pooleToConnect;
+
+    uint16_t port;
+    int aux = bowman.port;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
+
+    struct in_addr ip_addr;
+    if (inet_aton (bowman.ip, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
+    }
+
+    // Create the socket
+    int sockfd;
+    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
+
+    // We can connect to the server casting the struct:
+    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
+    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
+ 
+    char *data;
+    asprintf(&data, "%s", bowman.name);
+    sendMessage(sockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
+    free(data);
+
+    Frame frame = receiveMessage_CON_OK_Discovery(sockfd);
+    if(strcmp(frame.header, HEADER_CON_OK) == 0){
+        printf("Connection accepted\n");
+        close(sockfd);
+    }else{
+        printf("Connection refused\n");
+        close(sockfd);
+    }
+
+    /*
+    int i = 0;
+    char *info[3];
+    char *token = strtok(frame.data, "&");
+
+    while (token != NULL) {
+        info[i] = token;
+        i++;
+        token = strtok(NULL, "&");
+    }
+
+    pooleToConnect.name = strdup(info[0]);
+    pooleToConnect.ip = strdup(info[1]);
+    pooleToConnect.port = atoi(info[2]);*/
+
+    pooleToConnect.name = strdup("Poole1");
+    pooleToConnect.ip = strdup("127.0.0.1");
+    pooleToConnect.port = 1;
+
+    return pooleToConnect;
+}
+
+void main_menu(Bowman bowman){
+    int connected = 0;
     int inputLength;
     char *printBuffer;
     char buffer[100];
@@ -173,7 +346,7 @@ int main(int argc, char *argv[]){
     char *buffer;
     char *line;
     int numAmpersand = 0;
-    //Bowman bowman;
+    Bowman bowman;
 
     asprintf(&buffer, "\nPID: %d\n", getpid());
     write(STDOUT_FILENO, buffer, strlen(buffer));
@@ -254,6 +427,12 @@ int main(int argc, char *argv[]){
     write(1, buffer, strlen(buffer));
     free(buffer);
 
-    main_menu();
+    PooleToConnect pooleToConnect = connectToDiscovery(bowman);
+
+    printf("%s\n", pooleToConnect.name);
+    printf("%s\n", pooleToConnect.ip);
+    printf("%d\n", pooleToConnect.port);
+
+    //main_menu(bowman);
     return 0;
 }
