@@ -1,21 +1,4 @@
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <stdint.h>
-#include <strings.h>
-
-#define HEADER_NEW_POOLE "NEW_POOLE"
-#define HEADER_NEW_BOWMAN "NEW_BOWMAN"
-#define HEADER_CON_OK "CON_OK"
-#define HEADER_CON_KO "CON_KO"
+#include "common.h"
 
 typedef struct{
     char *ipPoole;
@@ -31,85 +14,8 @@ typedef struct{
     int connnections;
 }PooleServer; 
 
-typedef struct{
-    uint8_t type;
-    uint16_t headerLength;
-    char *header;
-    char *data;
-}Frame; 
-
 PooleServer **servers;
 int num_servers = 0;
-
-char * read_until(int fd, char end) {
-	char *string = NULL;
-	char c;
-	int i = 0, size;
-
-	while (1) {
-		size = read(fd, &c, sizeof(char));
-		if(string == NULL){
-			string = (char *) malloc(sizeof(char));
-		}
-		if(c != end && size > 0){
-			string = (char *) realloc(string, sizeof(char)*(i + 2));
-			string[i++] = c;
-		}else{
-			break;
-		}
-	}
-	string[i] = '\0';
-	return string;
-}
-
-void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data){
-    char message[256]; 
-
-    message[0] = type;
-
-    message[1] = headerLength & 0xFF;
-    message[2] = (headerLength >> 8) & 0xFF;
-
-    memcpy(&message[3], constantHeader, strlen(constantHeader));
-    message[3 + strlen(constantHeader)] = '\0';
-
-    memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
-    message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
-
-    write(sockfd, message, 256);
-}
-
-Frame frameTranslation(char message[256]){
-    Frame frame;
-
-    frame.type = message[0];
-
-    frame.headerLength = (message[2] << 8) | message[1];
-
-    frame.header = malloc(frame.headerLength + 1);
-    strncpy(frame.header, &message[3], frame.headerLength);
-    frame.header[frame.headerLength] = '\0';
-
-    if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0){
-        frame.data = NULL;
-        return frame;
-    }else{
-        frame.data = strdup(&message[3 + frame.headerLength]);
-    }
-
-    return frame;
-}
-
-Frame receiveMessage(int sockfd){
-    char message[256];
-    int size = read(sockfd, message, 256);
-    if(size == 0){
-        Frame frame;
-        frame.type = 0;
-        return frame;
-    }
-    return frameTranslation(message);
-}
 
 void pooleMenu(Frame frame, int sockfd){
     if(strcmp(frame.header, HEADER_NEW_POOLE) == 0){
@@ -198,7 +104,10 @@ void *discovery_poole(void *arg) {
 
 void bowmanMenu(Frame frame, int sockfd){
     if(strcmp(frame.header, HEADER_NEW_BOWMAN) == 0){
-        printf("New Bowman server: %s\n", frame.data);
+        printf("%d\n", frame.type);
+        printf("%d\n", frame.headerLength);
+        printf("%s\n", frame.header);
+        printf("%s\n", frame.data);
 
         int min = servers[0]->connnections;
         int index = 0;

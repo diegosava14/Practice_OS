@@ -1,30 +1,4 @@
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-
-#define OPT_CONNECT "CONNECT"
-#define OPT_CHECK_DOWNLOADS1 "CHECK"
-#define OPT_CHECK_DOWNLOADS2 "DOWNLOADS"
-#define OPT_LIST_SONGS1 "LIST"
-#define OPT_LIST_SONGS2 "SONGS"
-#define OPT_DOWNLOAD "DOWNLOAD"
-#define OPT_LIST_PLAYLISTS1 "LIST"
-#define OPT_LIST_PLAYLISTS2 "PLAYLISTS"
-#define OPT_LOGOUT "LOGOUT"
-#define OPT_CLEAR_DOWNLOADS1 "CLEAR"
-#define OPT_CLEAR_DOWNLOADS2 "DOWNLOADS"
-
-#define HEADER_NEW_POOLE "NEW_POOLE"
-#define HEADER_NEW_BOWMAN "NEW_BOWMAN"
-#define HEADER_CON_OK "CON_OK"
-#define HEADER_CON_KO "CON_KO"
+#include "common.h"
 
 typedef struct{
     char *name;
@@ -38,51 +12,6 @@ typedef struct{
     char *ip;
     int port;
 }PooleToConnect; 
-
-typedef struct{
-    uint8_t type;
-    uint16_t headerLength;
-    char *header;
-    char *data;
-}Frame; 
-
-char * read_until(int fd, char end) {
-	char *string = NULL;
-	char c;
-	int i = 0, size;
-
-	while (1) {
-		size = read(fd, &c, sizeof(char));
-		if(string == NULL){
-			string = (char *) malloc(sizeof(char));
-		}
-		if(c != end && size > 0){
-			string = (char *) realloc(string, sizeof(char)*(i + 2));
-			string[i++] = c;
-		}else{
-			break;
-		}
-	}
-	string[i] = '\0';
-	return string;
-}
-
-void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data){
-    char message[256]; 
-
-    message[0] = type;
-
-    message[1] = headerLength & 0xFF;
-    message[2] = (headerLength >> 8) & 0xFF;
-
-    memcpy(&message[3], constantHeader, strlen(constantHeader));
-    message[3 + strlen(constantHeader)] = '\0';
-
-    memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
-    message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
-
-    write(sockfd, message, 256);
-}
 
 Frame frameTranslation_CON_OK_Discovery(char message[256]){
     Frame frame;
@@ -109,38 +38,6 @@ Frame receiveMessage_CON_OK_Discovery(int sockfd){
         return frame;
     }
     return frameTranslation_CON_OK_Discovery(message);
-}
-
-Frame frameTranslation(char message[256]){
-    Frame frame;
-
-    frame.type = message[0];
-
-    frame.headerLength = (message[2] << 8) | message[1];
-
-    frame.header = malloc(frame.headerLength + 1);
-    strncpy(frame.header, &message[3], frame.headerLength);
-    frame.header[frame.headerLength] = '\0';
-
-    if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0){
-        frame.data = NULL;
-        return frame;
-    }else{
-        frame.data = strdup(&message[3 + frame.headerLength]);
-    }
-
-    return frame;
-}
-
-Frame receiveMessage(int sockfd){
-    char message[256];
-    int size = read(sockfd, message, 256);
-    if(size == 0){
-        Frame frame;
-        frame.type = 0;
-        return frame;
-    }
-    return frameTranslation(message);
 }
 
 void ksigint(){
@@ -204,7 +101,6 @@ PooleToConnect connectToDiscovery(Bowman bowman){
         close(sockfd);
     }
 
-    /*
     int i = 0;
     char *info[3];
     char *token = strtok(frame.data, "&");
@@ -217,11 +113,7 @@ PooleToConnect connectToDiscovery(Bowman bowman){
 
     pooleToConnect.name = strdup(info[0]);
     pooleToConnect.ip = strdup(info[1]);
-    pooleToConnect.port = atoi(info[2]);*/
-
-    pooleToConnect.name = strdup("Poole1");
-    pooleToConnect.ip = strdup("127.0.0.1");
-    pooleToConnect.port = 1;
+    pooleToConnect.port = atoi(info[2]);
 
     return pooleToConnect;
 }
