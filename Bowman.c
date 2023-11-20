@@ -118,7 +118,51 @@ PooleToConnect connectToDiscovery(Bowman bowman){
     return pooleToConnect;
 }
 
-void main_menu(Bowman bowman){
+int connectToPoole(PooleToConnect poole){
+    uint16_t port;
+    int aux = poole.port;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
+
+    struct in_addr ip_addr;
+    if (inet_aton (poole.ip, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
+    }
+
+    // Create the socket
+    int sockfd;
+    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
+
+    // We can connect to the server casting the struct:
+    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
+    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
+
+    return sockfd;
+}
+
+void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
+    int sockfd;
     int connected = 0;
     int inputLength;
     char *printBuffer;
@@ -156,6 +200,10 @@ void main_menu(Bowman bowman){
                 free(printBuffer);
             }else{
                 connected = 1;
+                sockfd = connectToPoole(pooleToConnect);
+                sockfd ++;
+                sockfd --;
+
                 asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name);
                 write(1, printBuffer, strlen(printBuffer));
                 free(printBuffer);
@@ -326,6 +374,6 @@ int main(int argc, char *argv[]){
     printf("%s\n", pooleToConnect.ip);
     printf("%d\n", pooleToConnect.port);*/
 
-    //main_menu(bowman);
+    main_menu(bowman, pooleToConnect);
     return 0;
 }

@@ -64,6 +64,85 @@ void connectToDiscovery(Poole poole){
     }
 }
 
+void pooleServer(Poole poole){
+    char *buffer;
+    fd_set rfds;
+
+    uint16_t port;
+    int aux = poole.portPoole;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("Error: invalid port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
+
+    // Create the socket
+    int sockfd;
+    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
+
+    // Specify the adress and port of the socket
+    // We'll admit connexions to any IP of our machine in the specified port
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr.s_addr = INADDR_ANY;
+
+    // When executing bind, we should add a cast:
+    // bind waits for a struct sockaddr* and we are passing a struct sockaddr_in*
+    if (bind (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("bind");
+        exit (EXIT_FAILURE);
+    }
+
+    // We now open the port (5 backlog queue, typical value)
+    listen (sockfd, 5);
+
+    FD_ZERO(&rfds);
+    FD_SET(sockfd, &rfds);
+
+    asprintf(&buffer, "Waiting for connections...\n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    while(1){
+        asprintf(&buffer, "We are waiting for a message or customer.\n");
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+
+        struct sockaddr_in c_addr;
+        socklen_t c_len = sizeof (c_addr);
+
+        select(512, &rfds, NULL, NULL, NULL);
+
+        for(int i=0; i<512; i++){
+            if(FD_ISSET(i, &rfds)){
+                if (i == sockfd){
+                    asprintf(&buffer, "New Bowman!\n");
+                    write(1, buffer, strlen(buffer));
+                    free(buffer);
+                    int newsock = accept (sockfd, (void *) &c_addr, &c_len);
+                    if (newsock < 0)
+                    {
+                        perror ("accept");
+                        exit (EXIT_FAILURE);
+                    }
+                    FD_SET(newsock, &rfds);
+                }else{
+                    //handle bowman frames, menu(i) i is the fd of the bowman
+                }
+            }
+        }
+    }
+}
+
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
@@ -122,6 +201,8 @@ int main(int argc, char *argv[]){
     //SOCKETS
 
     connectToDiscovery(poole);
+
+    pooleServer(poole);
 
     return 0;
 }
