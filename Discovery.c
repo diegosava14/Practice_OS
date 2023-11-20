@@ -41,7 +41,7 @@ void pooleMenu(Frame frame, int sockfd){
         servers[num_servers] = newServer;
         num_servers++;
 
-        printf("New poole server: %s %s %d\n", newServer->name, newServer->ip, newServer->port);
+        //printf("New poole server: %s %s %d\n", newServer->name, newServer->ip, newServer->port);
         sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, "");
     }
 }
@@ -81,14 +81,14 @@ void *discovery_poole(void *arg) {
         struct sockaddr_in c_addr;
         socklen_t c_len = sizeof(c_addr);
 
-        printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
+        //printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
         int newsock = accept(sockfd, (void *)&c_addr, &c_len);
         if (newsock < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
 
-        printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
+        //printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
         
         Frame frame = receiveMessage(newsock);
         
@@ -104,10 +104,6 @@ void *discovery_poole(void *arg) {
 
 void bowmanMenu(Frame frame, int sockfd){
     if(strcmp(frame.header, HEADER_NEW_BOWMAN) == 0){
-        printf("%d\n", frame.type);
-        printf("%d\n", frame.headerLength);
-        printf("%s\n", frame.header);
-        printf("%s\n", frame.data);
 
         int min = servers[0]->connnections;
         int index = 0;
@@ -122,7 +118,7 @@ void bowmanMenu(Frame frame, int sockfd){
         servers[index]->connnections++;
         char *data;
         asprintf(&data, "%s&%s&%d", servers[index]->name, servers[index]->ip, servers[index]->port);
-        printf("Sending %s to bowman\n", data);
+        //printf("Sending %s to bowman\n", data);
         sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, data);
         free(data);
     }
@@ -163,14 +159,14 @@ void *discovery_bowman(void *arg){
         struct sockaddr_in c_addr;
         socklen_t c_len = sizeof(c_addr);
 
-        printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
+        //printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
         int newsock = accept(sockfd, (void *)&c_addr, &c_len);
         if (newsock < 0) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
 
-        printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
+        //printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
         
         Frame frame = receiveMessage(newsock);
 

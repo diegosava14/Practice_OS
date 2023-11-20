@@ -94,10 +94,10 @@ PooleToConnect connectToDiscovery(Bowman bowman){
 
     Frame frame = receiveMessage_CON_OK_Discovery(sockfd);
     if(strcmp(frame.header, HEADER_CON_OK) == 0){
-        printf("Connection accepted\n");
+        //printf("Connection accepted\n");
         close(sockfd);
     }else{
-        printf("Connection refused\n");
+        //printf("Connection refused\n");
         close(sockfd);
     }
 
@@ -321,9 +321,10 @@ int main(int argc, char *argv[]){
 
     PooleToConnect pooleToConnect = connectToDiscovery(bowman);
 
+    /*
     printf("%s\n", pooleToConnect.name);
     printf("%s\n", pooleToConnect.ip);
-    printf("%d\n", pooleToConnect.port);
+    printf("%d\n", pooleToConnect.port);*/
 
     //main_menu(bowman);
     return 0;
