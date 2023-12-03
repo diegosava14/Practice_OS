@@ -195,7 +195,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
 
         if((strcasecmp(input[0], OPT_CONNECT) == 0)&&(wordCount == 1)){
             if(connected){
-                asprintf(&printBuffer, "%s is already connected.\n", bowman.name);
+                asprintf(&printBuffer, "%s is already connected.\n", bowman.name); //ERROR: Bowman name does not show
                 write(1, printBuffer, strlen(printBuffer));
                 free(printBuffer);
             }else{
@@ -204,7 +204,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
                 sockfd ++;
                 sockfd --;
 
-                asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name);
+                asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name); //ERROR: Bowman name does not show
                 write(1, printBuffer, strlen(printBuffer));
                 free(printBuffer);
             }
@@ -223,6 +223,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
         else if((strcasecmp(input[0], OPT_LIST_SONGS1) == 0)&&(strcasecmp(input[1], OPT_LIST_SONGS2) == 0)
         &&(wordCount == 2)){
             if(connected){
+                printf("List Songs\n"); //Errase later
 
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
@@ -234,7 +235,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
         else if((strcasecmp(input[0], OPT_LIST_PLAYLISTS1) == 0)&&(strcasecmp(input[1], OPT_LIST_PLAYLISTS2) == 0)
         &&(wordCount == 2)){
             if(connected){
-
+                printf("List Playlists\n"); //Errase later
             }else{
                 asprintf(&printBuffer, "Cannot List Playlist, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
