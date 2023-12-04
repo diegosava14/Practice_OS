@@ -201,8 +201,8 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
             }else{
                 connected = 1;
                 sockfd = connectToPoole(pooleToConnect);
-                sockfd ++;
-                sockfd --;
+
+                sendMessage(sockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
 
                 asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name); //ERROR: Bowman name does not show
                 write(1, printBuffer, strlen(printBuffer));

@@ -64,6 +64,14 @@ void connectToDiscovery(Poole poole){
     }
 }
 
+void handleFrames(Frame frame, int sockfd){
+    sockfd++;
+    sockfd--;
+
+    printf("Header: %s\n", frame.header);
+    printf("Data: %s\n", frame.data);
+}
+
 void pooleServer(Poole poole){
     char *buffer;
     fd_set rfds;
@@ -137,6 +145,8 @@ void pooleServer(Poole poole){
                     FD_SET(newsock, &rfds);
                 }else{
                     //handle bowman frames, menu(i) i is the fd of the bowman
+                    Frame frame = receiveMessage(i);
+                    handleFrames(frame, i);
                 }
             }
         }
