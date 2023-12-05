@@ -38,6 +38,13 @@ void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *co
 
     //add padding to the message so it is always 256 bytes
 
+    size_t paddingToAdd = 256 - (3 + strlen(constantHeader) + 1 + strlen(data) + 1);
+
+    size_t i;
+    for(i = 0; i < paddingToAdd; i++){
+        message[3 + strlen(constantHeader) + 1 + strlen(data) + 1 + i] = '\0';
+    }
+
     write(sockfd, message, 256);
 }
 
