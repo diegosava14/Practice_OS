@@ -36,6 +36,8 @@ void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *co
     memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
     message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
 
+    //add padding to the message so it is always 256 bytes
+
     write(sockfd, message, 256);
 }
 

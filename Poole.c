@@ -70,6 +70,13 @@ void handleFrames(Frame frame, int sockfd){
 
     printf("Header: %s\n", frame.header);
     printf("Data: %s\n", frame.data);
+
+    if(strcmp(frame.header, HEADER_LIST_SONGS) == 0){
+        char *data; 
+        asprintf(&data, "%s&%s&%s", "song1", "song2", "song3");
+        size_t dataSize = sizeof(data);
+        printf("Size of data contents: %zu bytes\n", dataSize);
+    }
 }
 
 void pooleServer(Poole poole){

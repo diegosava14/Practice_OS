@@ -31,6 +31,7 @@
 #define HEADER_NEW_BOWMAN "NEW_BOWMAN"
 #define HEADER_CON_OK "CON_OK"
 #define HEADER_CON_KO "CON_KO"
+#define HEADER_LIST_SONGS "LIST_SONGS"
 
 typedef struct{
     uint8_t type;

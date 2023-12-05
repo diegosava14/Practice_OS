@@ -225,6 +225,8 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
             if(connected){
                 printf("List Songs\n"); //Errase later
 
+                sendMessage(sockfd, 0x02, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, "");
+
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
