@@ -16,41 +16,15 @@ typedef struct{
 
 PooleServer **servers;
 int num_servers = 0;
+Discovery discovery;
+int pooleSockfd, bowmanSockfd;
+fd_set rfds;
 
-void pooleMenu(Frame frame, int sockfd){
-    if(strcmp(frame.header, HEADER_NEW_POOLE) == 0){
-        PooleServer *newServer;
-        newServer = malloc(sizeof(PooleServer));
-        
-        int i = 0;
-        char *info[3];
-        char *token = strtok(frame.data, "&");
-
-        while (token != NULL) {
-            info[i] = token;
-            i++;
-            token = strtok(NULL, "&");
-        }
-
-        newServer->name = strdup(info[0]);
-        newServer->ip = strdup(info[1]);
-        newServer->port = atoi(info[2]);
-        newServer->connnections = 0;
-
-        servers = realloc(servers, sizeof(PooleServer) * (num_servers + 1));
-        servers[num_servers] = newServer;
-        num_servers++;
-
-        //printf("New poole server: %s %s %d\n", newServer->name, newServer->ip, newServer->port);
-        sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, "");
-    }
-}
-
-void *discovery_poole(void *arg) {
-    Discovery *discovery = (Discovery *)arg;
+int initPooleSocket(){
+    printf("Port: %d\n", discovery.portPoole);
 
     uint16_t port;
-    int aux = discovery->portPoole;
+    int aux = discovery.portPoole;
     if (aux < 1 || aux > 65535) {
         perror("port");
         exit(EXIT_FAILURE);
@@ -76,34 +50,71 @@ void *discovery_poole(void *arg) {
     }
 
     listen(sockfd, 5);
-
-    while(1){
-        struct sockaddr_in c_addr;
-        socklen_t c_len = sizeof(c_addr);
-
-        //printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
-        int newsock = accept(sockfd, (void *)&c_addr, &c_len);
-        if (newsock < 0) {
-            perror("accept");
-            exit(EXIT_FAILURE);
-        }
-
-        //printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
-        
-        Frame frame = receiveMessage(newsock);
-        
-        pooleMenu(frame, newsock);
-
-        close(newsock);
-    }
-
-    close(sockfd);
-
-    return NULL;
+    return sockfd;
 }
 
-void bowmanMenu(Frame frame, int sockfd){
-    if(strcmp(frame.header, HEADER_NEW_BOWMAN) == 0){
+int initBowmanSocket(){
+    printf("Port: %d\n", discovery.portBowman);
+
+    uint16_t port;
+    int aux = discovery.portBowman;
+    if (aux < 1 || aux > 65535) {
+        perror("port");
+        exit(EXIT_FAILURE);
+    }
+    port = aux;
+
+    int sockfd;
+    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0) {
+        perror("socket TCP");
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero(&s_addr, sizeof(s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons(port);
+    s_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sockfd, (void *)&s_addr, sizeof(s_addr)) < 0) {
+        perror("bind");
+        exit(EXIT_FAILURE);
+    }
+
+    listen(sockfd, 5);
+    return sockfd;
+}
+
+void discoveryMenu(int sockfd){
+    Frame frame = receiveMessage(sockfd);
+
+    if(strcmp(frame.header, HEADER_NEW_POOLE) == 0){
+    PooleServer *newServer;
+    newServer = malloc(sizeof(PooleServer));
+    
+    int i = 0;
+    char *info[3];
+    char *token = strtok(frame.data, "&");
+
+    while (token != NULL) {
+        info[i] = token;
+        i++;
+        token = strtok(NULL, "&");
+    }
+
+    newServer->name = strdup(info[0]);
+    newServer->ip = strdup(info[1]);
+    newServer->port = atoi(info[2]);
+    newServer->connnections = 0;
+
+    servers = realloc(servers, sizeof(PooleServer) * (num_servers + 1));
+    servers[num_servers] = newServer;
+    num_servers++;
+
+    sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, "");
+    printf("New poole server added\n");
+    }else if(strcmp(frame.header, HEADER_NEW_BOWMAN) == 0){
 
         int min = servers[0]->connnections;
         int index = 0;
@@ -124,66 +135,80 @@ void bowmanMenu(Frame frame, int sockfd){
     }
 }
 
-void *discovery_bowman(void *arg){
-    Discovery *discovery = (Discovery*)arg;
-    
-    uint16_t port;
-    int aux = discovery->portBowman;
-    if (aux < 1 || aux > 65535) {
-        perror("port");
-        exit(EXIT_FAILURE);
-    }
-    port = aux;
+void discoveryServer() {
+    pooleSockfd = initPooleSocket();
+    bowmanSockfd = initBowmanSocket();
 
-    int sockfd;
-    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0) {
-        perror("socket TCP");
-        exit(EXIT_FAILURE);
-    }
+    FD_ZERO(&rfds);
+    FD_SET(pooleSockfd, &rfds);
+    FD_SET(bowmanSockfd, &rfds);
 
-    struct sockaddr_in s_addr;
-    bzero(&s_addr, sizeof(s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons(port);
-    s_addr.sin_addr.s_addr = INADDR_ANY;
+    printf("Poole socket: %d\n", pooleSockfd);
+    printf("Bowman socket: %d\n", bowmanSockfd);
 
-    if (bind(sockfd, (void *)&s_addr, sizeof(s_addr)) < 0) {
-        perror("bind");
-        exit(EXIT_FAILURE);
-    }
-
-    listen(sockfd, 5);
-
-    while(1){
+    while (1) {
         struct sockaddr_in c_addr;
         socklen_t c_len = sizeof(c_addr);
 
-        //printf("Waiting for connections on port %hu\n", ntohs(s_addr.sin_port));
-        int newsock = accept(sockfd, (void *)&c_addr, &c_len);
-        if (newsock < 0) {
-            perror("accept");
-            exit(EXIT_FAILURE);
+        fd_set tmp_fds = rfds;  // Copy the set for select
+
+        select(512, &tmp_fds, NULL, NULL, NULL);
+
+        for (int i = 0; i < 512; i++) {
+            if (FD_ISSET(i, &tmp_fds)) {
+                if (i == pooleSockfd || i == bowmanSockfd) {
+                    printf("New connection\n");
+                    int newsock = accept(i, (void *)&c_addr, &c_len);
+
+                    printf("New client with socket %d\n", newsock);
+                    if (newsock < 0) {
+                        perror("accept");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    FD_SET(newsock, &tmp_fds);
+
+                    // Print the type of connection (Poole or Bowman)
+                    if (i == pooleSockfd) {
+                        printf("Poole connected\n");
+                    } else {
+                        printf("Bowman connected\n");
+                    }
+                } else {
+                    printf("New message from %d\n", i);
+                    discoveryMenu(i);
+                }
+            }
         }
+    }
+}
 
-        //printf("New connection from %s:%hu\n", inet_ntoa(c_addr.sin_addr), ntohs(c_addr.sin_port));
-        
-        Frame frame = receiveMessage(newsock);
 
-        bowmanMenu(frame, newsock);
+void ksigint(){
+    FD_ZERO(&rfds);
 
-        close(newsock);
+    close(pooleSockfd);
+    close(bowmanSockfd);
+
+    for(int i=0; i<num_servers; i++){
+        free(servers[i]->name);
+        free(servers[i]->ip);
+        free(servers[i]);
     }
 
-    close(sockfd);
+    free(servers);
 
-    return NULL;
+    free(discovery.ipPoole);
+    free(discovery.ipBowman);
+
+    exit(0);
 }
 
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
-    Discovery discovery;
+
+    signal(SIGINT, ksigint);
 
     if (argc != 2) {
         asprintf(&buffer, "ERROR: Expecting one parameter.\n");
@@ -223,29 +248,7 @@ int main(int argc, char *argv[]){
 
     close(fd_discovery);
 
-    pthread_t thread_ids[2];
-    int status[2];
-
-    status[0] = pthread_create(&thread_ids[0], NULL, discovery_poole, (void*)&discovery);
-
-    if(status[0] != 0){
-        perror("Error creating thread");
-        exit(EXIT_FAILURE);
-    }
-
-    status[1] = pthread_create(&thread_ids[1], NULL, discovery_bowman, (void*)&discovery);
-
-    if(status[1] != 0){
-        perror("Error creating thread");
-        exit(EXIT_FAILURE);
-    }
-
-    free(discovery.ipPoole);
-    free(discovery.ipBowman);
-
-    for(int i = 0; i < 2; i++){
-        pthread_join(thread_ids[i], NULL);
-    }
+    discoveryServer();
 
     return 0;
 }

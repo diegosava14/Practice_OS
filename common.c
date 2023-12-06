@@ -35,6 +35,11 @@ void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *co
 
     memcpy(&message[3 + strlen(constantHeader) + 1], data, strlen(data));
     message[3 + strlen(constantHeader) + 1 + strlen(data)] = '\0';
+    
+    size_t paddingToAdd = 256 - (3 + strlen(constantHeader) + 1 + strlen(data) + 1);
+    memset(&message[3 + strlen(constantHeader) + 1 + strlen(data) + 1], 0, paddingToAdd);
+
+    //printf("Total size of message sent: %ld\n", 3+ strlen(constantHeader) + 1 + strlen(data) + 1 + paddingToAdd);
 
     write(sockfd, message, 256);
 }
@@ -63,10 +68,17 @@ Frame frameTranslation(char message[256]){
 Frame receiveMessage(int sockfd){
     char message[256];
     int size = read(sockfd, message, 256);
+
+    //printf("Total size of message received: %d\n", size);
+
     if(size == 0){
         Frame frame;
         frame.type = 0;
+        frame.headerLength = 0;
+        frame.header = "NULL";
+        frame.data = "NULL";
         return frame;
     }
+
     return frameTranslation(message);
 }

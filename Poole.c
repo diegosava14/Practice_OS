@@ -55,12 +55,13 @@ void connectToDiscovery(Poole poole){
     free(data);
 
     Frame frame = receiveMessage(sockfd);
+    
     if(strcmp(frame.header, HEADER_CON_OK) == 0){
-        //printf("Connection accepted\n");
-        close(sockfd);
+        printf("Connection accepted\n");
+        //close(sockfd);
     }else{
-        //printf("Connection refused\n");
-        close(sockfd);
+        printf("Connection refused\n");
+        //close(sockfd);
     }
 }
 
@@ -95,7 +96,6 @@ void handleFrames(Frame frame, int sockfd){
         free(buffer);
 
     }
-
 }
 
 void pooleServer(Poole poole){
