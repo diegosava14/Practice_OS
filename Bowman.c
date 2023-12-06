@@ -224,6 +224,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
         &&(wordCount == 2)){
             if(connected){
                 printf("List Songs\n"); //Errase later
+                sendMessage(sockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
 
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
@@ -236,6 +237,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
         &&(wordCount == 2)){
             if(connected){
                 printf("List Playlists\n"); //Errase later
+                sendMessage(sockfd, 0x01, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
             }else{
                 asprintf(&printBuffer, "Cannot List Playlist, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));

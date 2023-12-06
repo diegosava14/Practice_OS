@@ -67,9 +67,35 @@ void connectToDiscovery(Poole poole){
 void handleFrames(Frame frame, int sockfd){
     sockfd++;
     sockfd--;
+    char *buffer;
 
     printf("Header: %s\n", frame.header);
     printf("Data: %s\n", frame.data);
+
+    if (strcmp(frame.header, HEADER_NEW_BOWMAN) == 0) {
+        asprintf(&buffer, "New user connected: %s", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+
+    } else if(strcmp(frame.header, HEADER_LIST_SONGS) == 0){
+
+        asprintf(&buffer, "New request - %s requires the list of songs.", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+        asprintf(&buffer, "Sending song list to %s", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+
+    } else if(strcmp(frame.header, HEADER_LIST_PLAYLISTS) == 0){
+        asprintf(&buffer, "New request - %s requires the list of playlists.", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+        asprintf(&buffer, "Sending playlist list to %s", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+
+    }
+
 }
 
 void pooleServer(Poole poole){
@@ -132,11 +158,9 @@ void pooleServer(Poole poole){
 
         for(int i=0; i<512; i++){
             if(FD_ISSET(i, &rfds)){
-                if (i == sockfd){
-                    asprintf(&buffer, "New Bowman!\n");
-                    write(1, buffer, strlen(buffer));
-                    free(buffer);
+                if (i == sockfd){                 
                     int newsock = accept (sockfd, (void *) &c_addr, &c_len);
+
                     if (newsock < 0)
                     {
                         perror ("accept");
