@@ -56,7 +56,7 @@ Frame frameTranslation(char message[256]){
     frame.header[frame.headerLength] = '\0';
 
     if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0 
-        || strcmp(frame.header, HEADER_OK_DISCONNECT) == 0){
+        || strcmp(frame.header, HEADER_OK_DISCONNECT) == 0 || strcmp(frame.header, HEADER_ACK) == 0){
         frame.data = NULL;
         return frame;
     }else{

@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <stdint.h>
 #include <strings.h>
+#include <dirent.h>
 
 #define OPT_CONNECT "CONNECT"
 #define OPT_CHECK_DOWNLOADS1 "CHECK"
@@ -27,6 +28,7 @@
 #define OPT_CLEAR_DOWNLOADS1 "CLEAR"
 #define OPT_CLEAR_DOWNLOADS2 "DOWNLOADS"
 
+#define HEADER_ACK "ACK"
 #define HEADER_NEW_POOLE "NEW_POOLE"
 #define HEADER_NEW_BOWMAN "NEW_BOWMAN"
 #define HEADER_CON_OK "CON_OK"
@@ -35,6 +37,7 @@
 #define HEADER_OK_DISCONNECT "CONOK"
 
 #define HEADER_LIST_SONGS "LIST_SONGS"
+#define HEADER_SONGS_RESPONSE "SONGS_RESPONSE"
 #define HEADER_LIST_PLAYLISTS "LIST_PLAYLISTS" 
 
 typedef struct{

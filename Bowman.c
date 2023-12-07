@@ -258,6 +258,29 @@ void main_menu(){
                 printf("List Songs\n"); //Errase later
                 sendMessage(pooleSockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
 
+                Frame frame = receiveMessage(pooleSockfd);
+                printf("Header: %s\n", frame.header);
+                printf("Data: %s\n", frame.data);
+
+                sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+
+                int num_Frames = atoi(frame.data);
+
+                for(int i = 0; i < num_Frames; i++){
+                    frame = receiveMessage(pooleSockfd);
+
+                    int y = 0;
+                    char *token = strtok(frame.data, "&");
+
+                    while (token != NULL) {
+                        printf("%s\n", token);
+                        y++;
+                        token = strtok(NULL, "&");
+                    }
+
+                    sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+                }
+
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));

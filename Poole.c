@@ -14,6 +14,10 @@ int discoverySockfd, serverSockfd;
 int *clients;
 int num_clients = 0; 
 fd_set rfds;
+char **toSend; 
+int num_toSend = 0;
+char **frameData;
+int num_frames = 0;
 
 void connectToDiscovery(){
     uint16_t port;
@@ -91,6 +95,105 @@ void removeClient(int sockfd) {
     FD_CLR(sockfd, &rfds);
 }
 
+void listSongs(int sockfd){
+    sockfd++;
+    sockfd--;
+
+    char *buffer;
+    DIR *dir;
+    struct dirent *ent;
+
+    asprintf(&buffer, "%s/songs", poole.folder);
+    const char *path = buffer;
+
+    printf("Path: %s\n", path);
+
+    dir = opendir(path);
+
+    if (dir != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            char *song_name = strdup(ent->d_name);
+            if(strcmp(song_name, ".") != 0 && strcmp(song_name, "..") != 0){
+                toSend = realloc(toSend, sizeof(char *) * (num_toSend + 1));
+                toSend[num_toSend] = strdup(song_name);
+                num_toSend++;
+            }
+            free(song_name);
+        }
+
+        closedir(dir);
+    } else {
+        perror("Unable to open directory");
+    }
+
+    free(buffer);
+
+    int total_size = 0;
+    size_t available = 256 - (3 + strlen(HEADER_SONGS_RESPONSE) + 1);
+
+    for(int i=0; i<num_toSend; i++){
+        total_size += strlen(toSend[i])+1;
+    }
+
+    num_frames = (int)(total_size / available) + 1;
+    frameData = malloc(sizeof(char *) * num_frames);
+    size_t current = available; 
+    int index = 0;
+
+    printf("Total size: %d\n", total_size);
+    printf("Available: %ld\n", available);
+    printf("Num frames: %d\n", num_frames);
+
+    for(int i=0; i<num_toSend; i++){
+        if(strlen(toSend[i])+1 < current){
+            if(current == available){
+                //first one
+                current -= strlen(toSend[i]);
+                asprintf(&buffer, "%s", toSend[i]);
+            }else if(i == num_toSend - 1){
+                //last one
+                asprintf(&buffer, "%s&%s", buffer, toSend[i]);
+                frameData[index] = strdup(buffer);
+            }else{
+                //general
+                current -= strlen(toSend[i])+1;
+                asprintf(&buffer, "%s&%s", buffer, toSend[i]);
+            }
+        }else{
+            //doesn't fit in current frame
+            if(i == num_toSend - 1){
+                frameData[index] = strdup(buffer);
+                index++;
+                current = available - strlen(toSend[i]);
+                asprintf(&buffer, "%s", toSend[i]);
+                frameData[index] = strdup(buffer);
+
+            }else{
+                frameData[index] = strdup(buffer);
+                index++;
+                current = available - strlen(toSend[i]);
+                asprintf(&buffer, "%s", toSend[i]);
+            }
+        }
+    }
+
+    char *data; 
+    asprintf(&data, "%d", num_frames);
+    sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, data);
+    free(data);
+
+    Frame frame = receiveMessage(sockfd);
+    printf("Header: %s\n", frame.header);
+
+    for(int i=0; i<num_frames; i++){
+        sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, frameData[i]);
+        Frame frame = receiveMessage(sockfd);
+        printf("Header: %s\n", frame.header);
+    }
+
+    free(buffer);
+}
+
 void handleFrames(Frame frame, int sockfd){
     sockfd++;
     sockfd--;
@@ -106,12 +209,14 @@ void handleFrames(Frame frame, int sockfd){
 
     } else if(strcmp(frame.header, HEADER_LIST_SONGS) == 0){
 
-        asprintf(&buffer, "New request - %s requires the list of songs.", frame.data);
+        asprintf(&buffer, "New request - %s requires the list of songs.\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
-        asprintf(&buffer, "Sending song list to %s", frame.data);
+        asprintf(&buffer, "Sending song list to %s\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
+
+        listSongs(sockfd);
 
     } else if(strcmp(frame.header, HEADER_LIST_PLAYLISTS) == 0){
         asprintf(&buffer, "New request - %s requires the list of playlists.", frame.data);
