@@ -9,7 +9,13 @@ typedef struct{
     int portPoole;
 }Poole;
 
-void connectToDiscovery(Poole poole){
+Poole poole;
+int discoverySockfd, serverSockfd;
+int *clients;
+int num_clients = 0; 
+fd_set rfds;
+
+void connectToDiscovery(){
     uint16_t port;
     int aux = poole.portDiscovery;
     if (aux < 1 || aux > 65535)
@@ -27,9 +33,8 @@ void connectToDiscovery(Poole poole){
     }
 
     // Create the socket
-    int sockfd;
-    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
+    discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (discoverySockfd < 0)
     {
         perror ("socket TCP");
         exit (EXIT_FAILURE);
@@ -43,7 +48,7 @@ void connectToDiscovery(Poole poole){
 
     // We can connect to the server casting the struct:
     // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
-    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
     {
         perror ("connect");
         exit (EXIT_FAILURE);
@@ -51,17 +56,15 @@ void connectToDiscovery(Poole poole){
  
     char *data;
     asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
-    sendMessage(sockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
+    sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
     free(data);
 
-    Frame frame = receiveMessage(sockfd);
+    Frame frame = receiveMessage(discoverySockfd);
     
     if(strcmp(frame.header, HEADER_CON_OK) == 0){
         printf("Connection accepted\n");
-        //close(sockfd);
     }else{
         printf("Connection refused\n");
-        //close(sockfd);
     }
 }
 
@@ -98,9 +101,9 @@ void handleFrames(Frame frame, int sockfd){
     }
 }
 
-void pooleServer(Poole poole){
+void pooleServer(){
     char *buffer;
-    fd_set rfds;
+    //fd_set rfds;
 
     uint16_t port;
     int aux = poole.portPoole;
@@ -112,9 +115,8 @@ void pooleServer(Poole poole){
     port = aux;
 
     // Create the socket
-    int sockfd;
-    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
+    serverSockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (serverSockfd < 0)
     {
         perror ("socket TCP");
         exit (EXIT_FAILURE);
@@ -130,17 +132,17 @@ void pooleServer(Poole poole){
 
     // When executing bind, we should add a cast:
     // bind waits for a struct sockaddr* and we are passing a struct sockaddr_in*
-    if (bind (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    if (bind (serverSockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
     {
         perror ("bind");
         exit (EXIT_FAILURE);
     }
 
     // We now open the port (5 backlog queue, typical value)
-    listen (sockfd, 5);
+    listen (serverSockfd, 5);
 
     FD_ZERO(&rfds);
-    FD_SET(sockfd, &rfds);
+    FD_SET(serverSockfd, &rfds);
 
     asprintf(&buffer, "Waiting for connections...\n");
     write(1, buffer, strlen(buffer));
@@ -158,14 +160,18 @@ void pooleServer(Poole poole){
 
         for(int i=0; i<512; i++){
             if(FD_ISSET(i, &rfds)){
-                if (i == sockfd){                 
-                    int newsock = accept (sockfd, (void *) &c_addr, &c_len);
+                if (i == serverSockfd){                 
+                    int newsock = accept (serverSockfd, (void *) &c_addr, &c_len);
 
                     if (newsock < 0)
                     {
                         perror ("accept");
                         exit (EXIT_FAILURE);
                     }
+
+                    clients = realloc(clients, sizeof(int) * (num_clients + 1));
+                    clients[num_clients] = newsock;
+                    num_clients++;
                     FD_SET(newsock, &rfds);
                 }else{
                     //handle bowman frames, menu(i) i is the fd of the bowman
@@ -177,10 +183,37 @@ void pooleServer(Poole poole){
     }
 }
 
+void ksigint(){
+    char *buffer;
+    asprintf(&buffer, "SIGINT received. Closing server...\n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    FD_ZERO(&rfds);
+
+    free(poole.nameServer);
+    free(poole.folder);
+    free(poole.ipDiscovery);
+    free(poole.ipPoole);
+
+    for (int i = 0; i < num_clients; i++)
+    {
+        close(clients[i]);
+    }
+    
+    free(clients);
+
+    close(discoverySockfd);
+    close(serverSockfd);
+
+    exit(0);
+}
+
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
-    Poole poole;
+
+    signal(SIGINT, ksigint);
 
     if (argc != 2) {
         asprintf(&buffer, "ERROR: Expecting one parameter.\n");
@@ -234,9 +267,9 @@ int main(int argc, char *argv[]){
 
     //SOCKETS
 
-    connectToDiscovery(poole);
+    connectToDiscovery();
 
-    pooleServer(poole);
+    pooleServer();
 
     return 0;
 }

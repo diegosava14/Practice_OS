@@ -13,6 +13,10 @@ typedef struct{
     int port;
 }PooleToConnect; 
 
+Bowman bowman;
+PooleToConnect pooleToConnect;
+int discoverySockfd, bowmanSockfd;
+
 Frame frameTranslation_CON_OK_Discovery(char message[256]){
     Frame frame;
 
@@ -42,10 +46,21 @@ Frame receiveMessage_CON_OK_Discovery(int sockfd){
 
 void ksigint(){
     write(1, "\n", 1);
+
+    free(bowman.name);
+    free(bowman.folder);
+    free(bowman.ip);
+
+    free(pooleToConnect.name);
+    free(pooleToConnect.ip);
+
+    close(discoverySockfd);
+    close(bowmanSockfd);
+
     exit(EXIT_SUCCESS);
 }
 
-PooleToConnect connectToDiscovery(Bowman bowman){
+PooleToConnect connectToDiscovery(){
     PooleToConnect pooleToConnect;
 
     uint16_t port;
@@ -65,9 +80,8 @@ PooleToConnect connectToDiscovery(Bowman bowman){
     }
 
     // Create the socket
-    int sockfd;
-    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
+    discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (discoverySockfd < 0)
     {
         perror ("socket TCP");
         exit (EXIT_FAILURE);
@@ -81,7 +95,7 @@ PooleToConnect connectToDiscovery(Bowman bowman){
 
     // We can connect to the server casting the struct:
     // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
-    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
     {
         perror ("connect");
         exit (EXIT_FAILURE);
@@ -89,11 +103,11 @@ PooleToConnect connectToDiscovery(Bowman bowman){
  
     char *data;
     asprintf(&data, "%s", bowman.name);
-    sendMessage(sockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
+    sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
     free(data);
 
     printf("Waiting for a Poole...\n");
-    Frame frame = receiveMessage_CON_OK_Discovery(sockfd);
+    Frame frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
     printf("Poole found!\n");
 
     /*
@@ -165,8 +179,7 @@ int connectToPoole(PooleToConnect poole){
     return sockfd;
 }
 
-void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
-    int sockfd;
+void main_menu(){
     int connected = 0;
     int inputLength;
     char *printBuffer;
@@ -204,9 +217,9 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
                 free(printBuffer);
             }else{
                 connected = 1;
-                sockfd = connectToPoole(pooleToConnect);
+                bowmanSockfd = connectToPoole(pooleToConnect);
 
-                sendMessage(sockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
+                sendMessage(bowmanSockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
 
                 asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name); //ERROR: Bowman name does not show
                 write(1, printBuffer, strlen(printBuffer));
@@ -228,7 +241,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
         &&(wordCount == 2)){
             if(connected){
                 printf("List Songs\n"); //Errase later
-                sendMessage(sockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
+                sendMessage(bowmanSockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
 
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
@@ -241,7 +254,7 @@ void main_menu(Bowman bowman, PooleToConnect pooleToConnect){
         &&(wordCount == 2)){
             if(connected){
                 printf("List Playlists\n"); //Errase later
-                sendMessage(sockfd, 0x01, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
+                sendMessage(bowmanSockfd, 0x01, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
             }else{
                 asprintf(&printBuffer, "Cannot List Playlist, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -293,7 +306,6 @@ int main(int argc, char *argv[]){
     char *buffer;
     char *line;
     int numAmpersand = 0;
-    Bowman bowman;
 
     asprintf(&buffer, "\nPID: %d\n", getpid());
     write(STDOUT_FILENO, buffer, strlen(buffer));
@@ -374,13 +386,13 @@ int main(int argc, char *argv[]){
     write(1, buffer, strlen(buffer));
     free(buffer);
 
-    PooleToConnect pooleToConnect = connectToDiscovery(bowman);
+    pooleToConnect = connectToDiscovery();
 
     /*
     printf("%s\n", pooleToConnect.name);
     printf("%s\n", pooleToConnect.ip);
     printf("%d\n", pooleToConnect.port);*/
 
-    main_menu(bowman, pooleToConnect);
+    main_menu();
     return 0;
 }

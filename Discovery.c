@@ -19,6 +19,8 @@ int num_servers = 0;
 Discovery discovery;
 int pooleSockfd, bowmanSockfd;
 fd_set rfds;
+int *clients;
+int num_clients = 0;
 
 int initPooleSocket(){
     printf("Port: %d\n", discovery.portPoole);
@@ -114,6 +116,7 @@ void discoveryMenu(int sockfd){
 
     sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, "");
     printf("New poole server added\n");
+
     }else if(strcmp(frame.header, HEADER_NEW_BOWMAN) == 0){
 
         int min = servers[0]->connnections;
@@ -166,6 +169,9 @@ void discoveryServer() {
                         exit(EXIT_FAILURE);
                     }
 
+                    clients = realloc(clients, sizeof(int) * (num_clients + 1));
+                    clients[num_clients] = newsock;
+                    num_clients++;
                     FD_SET(newsock, &tmp_fds);
 
                     // Print the type of connection (Poole or Bowman)
@@ -196,6 +202,12 @@ void ksigint(){
         free(servers[i]);
     }
 
+    for (int i = 0; i < num_clients; i++)
+    {
+        close(clients[i]);
+    }
+    
+    free(clients);
     free(servers);
 
     free(discovery.ipPoole);
