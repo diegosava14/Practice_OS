@@ -15,7 +15,7 @@ typedef struct{
 
 Bowman bowman;
 PooleToConnect pooleToConnect;
-int discoverySockfd, bowmanSockfd;
+int discoverySockfd, pooleSockfd;
 
 Frame frameTranslation_CON_OK_Discovery(char message[256]){
     Frame frame;
@@ -55,7 +55,7 @@ void ksigint(){
     free(pooleToConnect.ip);
 
     close(discoverySockfd);
-    close(bowmanSockfd);
+    close(pooleSockfd);
 
     exit(EXIT_SUCCESS);
 }
@@ -179,13 +179,26 @@ int connectToPoole(PooleToConnect poole){
     return sockfd;
 }
 
+void logout(){
+    sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
+
+    Frame frame = receiveMessage(pooleSockfd);
+    printf("Poole disconnection header: %s\n", frame.header);
+
+    sendMessage(discoverySockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, pooleToConnect.name);
+
+    frame = receiveMessage(discoverySockfd);
+    printf("Discovery disconnection header: %s\n", frame.header);
+}
+
 void main_menu(){
+    int run = 1; 
     int connected = 0;
     int inputLength;
     char *printBuffer;
     char buffer[100];
 
-    while (1) {
+    while (run) {
         int wordCount = 0;
         int spaceCount = 0;
         write(1, "$ ", 2);
@@ -217,9 +230,9 @@ void main_menu(){
                 free(printBuffer);
             }else{
                 connected = 1;
-                bowmanSockfd = connectToPoole(pooleToConnect);
+                pooleSockfd = connectToPoole(pooleToConnect);
 
-                sendMessage(bowmanSockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
+                sendMessage(pooleSockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
 
                 asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name); //ERROR: Bowman name does not show
                 write(1, printBuffer, strlen(printBuffer));
@@ -229,7 +242,9 @@ void main_menu(){
 
         else if((strcasecmp(input[0], OPT_LOGOUT) == 0)&&(wordCount == 1)){
             if(connected){
-
+                logout();
+                run = 0;
+                connected = 0;
             }else{
                 asprintf(&printBuffer, "Cannot Logout, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -241,7 +256,7 @@ void main_menu(){
         &&(wordCount == 2)){
             if(connected){
                 printf("List Songs\n"); //Errase later
-                sendMessage(bowmanSockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
+                sendMessage(pooleSockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
 
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
@@ -254,7 +269,7 @@ void main_menu(){
         &&(wordCount == 2)){
             if(connected){
                 printf("List Playlists\n"); //Errase later
-                sendMessage(bowmanSockfd, 0x01, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
+                sendMessage(pooleSockfd, 0x01, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
             }else{
                 asprintf(&printBuffer, "Cannot List Playlist, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -300,6 +315,8 @@ void main_menu(){
             free(printBuffer);
         }
     }
+
+    ksigint();
 }
 
 int main(int argc, char *argv[]){

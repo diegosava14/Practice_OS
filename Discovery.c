@@ -91,6 +91,10 @@ int initBowmanSocket(){
 void discoveryMenu(int sockfd){
     Frame frame = receiveMessage(sockfd);
 
+    printf("\nType: %d\n", frame.type);
+    printf("Header: %s\n", frame.header);
+    printf("Data: %s\n\n", frame.data);
+
     if(strcmp(frame.header, HEADER_NEW_POOLE) == 0){
     PooleServer *newServer;
     newServer = malloc(sizeof(PooleServer));
@@ -135,6 +139,20 @@ void discoveryMenu(int sockfd){
         //printf("Sending %s to bowman\n", data);
         sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, data);
         free(data);
+
+    }else if(strcmp (frame.header, HEADER_EXIT) == 0){
+        for(int i = 0; i < num_servers; i++){
+            if(strcmp(servers[i]->name, frame.data) == 0){
+                servers[i]->connnections--;
+                break;
+            }
+        }
+
+        sendMessage(sockfd, 0x06, strlen(HEADER_OK_DISCONNECT), HEADER_OK_DISCONNECT, "");
+
+        FD_CLR(sockfd, &rfds);
+        close(sockfd);
+        printf("Bowman disconnected\n");
     }
 }
 
@@ -172,9 +190,8 @@ void discoveryServer() {
                     clients = realloc(clients, sizeof(int) * (num_clients + 1));
                     clients[num_clients] = newsock;
                     num_clients++;
-                    FD_SET(newsock, &tmp_fds);
+                    FD_SET(newsock, &rfds);
 
-                    // Print the type of connection (Poole or Bowman)
                     if (i == pooleSockfd) {
                         printf("Poole connected\n");
                     } else {

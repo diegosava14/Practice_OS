@@ -68,6 +68,29 @@ void connectToDiscovery(){
     }
 }
 
+void removeClient(int sockfd) {
+    int index = -1;
+
+    for (int i = 0; i < num_clients; i++) {
+        if (clients[i] == sockfd) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index != -1) {
+        for (int i = index; i < num_clients - 1; i++) {
+            clients[i] = clients[i + 1];
+        }
+
+        num_clients--;
+
+        clients = realloc(clients, sizeof(int) * num_clients);
+    }
+
+    FD_CLR(sockfd, &rfds);
+}
+
 void handleFrames(Frame frame, int sockfd){
     sockfd++;
     sockfd--;
@@ -98,6 +121,16 @@ void handleFrames(Frame frame, int sockfd){
         write(1, buffer, strlen(buffer));
         free(buffer);
 
+    }else if(strcmp(frame.header, HEADER_EXIT) == 0){
+        removeClient(sockfd);
+
+        sendMessage(sockfd, 0x06, strlen(HEADER_OK_DISCONNECT), HEADER_OK_DISCONNECT, "");
+
+        close(sockfd);
+
+        asprintf(&buffer, "User %s disconnected.", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
     }
 }
 
@@ -149,7 +182,7 @@ void pooleServer(){
     free(buffer);
 
     while(1){
-        asprintf(&buffer, "We are waiting for a message or customer.\n");
+        asprintf(&buffer, "\nWe are waiting for a message or customer.\n");
         write(1, buffer, strlen(buffer));
         free(buffer);
 
