@@ -17,6 +17,22 @@ Bowman bowman;
 PooleToConnect pooleToConnect;
 int discoverySockfd, pooleSockfd;
 
+void ksigint(){
+    write(1, "\n", 1);
+
+    free(bowman.name);
+    free(bowman.folder);
+    free(bowman.ip);
+
+    free(pooleToConnect.name);
+    free(pooleToConnect.ip);
+
+    close(discoverySockfd);
+    close(pooleSockfd);
+
+    exit(EXIT_SUCCESS);
+}
+
 Frame frameTranslation_CON_OK_Discovery(char message[256]){
     Frame frame;
 
@@ -42,22 +58,6 @@ Frame receiveMessage_CON_OK_Discovery(int sockfd){
         return frame;
     }
     return frameTranslation_CON_OK_Discovery(message);
-}
-
-void ksigint(){
-    write(1, "\n", 1);
-
-    free(bowman.name);
-    free(bowman.folder);
-    free(bowman.ip);
-
-    free(pooleToConnect.name);
-    free(pooleToConnect.ip);
-
-    close(discoverySockfd);
-    close(pooleSockfd);
-
-    exit(EXIT_SUCCESS);
 }
 
 PooleToConnect connectToDiscovery(){
@@ -106,18 +106,11 @@ PooleToConnect connectToDiscovery(){
     sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
     free(data);
 
-    printf("Waiting for a Poole...\n");
     Frame frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
-    printf("Poole found!\n");
-
-    /*
-    if(strcmp(frame.header, HEADER_CON_OK) == 0){
-        //printf("Connection accepted\n");
-        close(sockfd);
-    }else{
-        //printf("Connection refused\n");
-        close(sockfd);
-    }*/
+    if(strcmp(frame.header, HEADER_CON_OK) != 0){
+        perror("Connection refused");
+        ksigint();
+    }
 
     int i = 0;
     char *info[3];
@@ -183,12 +176,137 @@ void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
 
     Frame frame = receiveMessage(pooleSockfd);
-    printf("Poole disconnection header: %s\n", frame.header);
-
+    if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
+        perror("Error disconnecting from poole\n");
+        ksigint();
+    }
+    
     sendMessage(discoverySockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, pooleToConnect.name);
 
     frame = receiveMessage(discoverySockfd);
-    printf("Discovery disconnection header: %s\n", frame.header);
+    if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
+        perror("Error disconnecting from discovery\n");
+        ksigint();
+    }
+}
+
+void listSongs(){
+    char *buffer; 
+
+    Frame frame = receiveMessage(pooleSockfd);
+    if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
+        perror("Error receiving songs\n");
+        ksigint();
+    }
+
+    int info[2];
+    int i = 0;
+
+    char *token = strtok(frame.data, "&");
+    while (token != NULL) {
+        info[i] = atoi(token);
+        i++;
+        token = strtok(NULL, "&");
+    }
+
+    sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+
+    asprintf(&buffer, "There are %d songs available for download:\n", info[1]);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    int num_Frames = info[0];
+    int song_count = 0;
+
+    for(int i = 0; i < num_Frames; i++){
+        frame = receiveMessage(pooleSockfd);
+
+        int y = 0;
+        char *token = strtok(frame.data, "&");
+
+        while (token != NULL) {
+            asprintf(&buffer, "%d. %s\n", song_count+1, token);
+            write(1, buffer, strlen(buffer));
+            free(buffer);
+            song_count++;
+            y++;
+            token = strtok(NULL, "&");
+        }
+
+        sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+    }
+}
+
+void listPlaylists(){
+    char *buffer; 
+    sendMessage(pooleSockfd, 0x02, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
+
+    Frame frame = receiveMessage(pooleSockfd);
+    if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
+        perror("Error receiving playlists\n");
+        ksigint();
+    }
+
+    int num_playlists = atoi(frame.data);
+
+    asprintf(&buffer, "There are %d lists available for download:\n", num_playlists);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+
+    for(int i=0; i<num_playlists; i++){
+        Frame frame = receiveMessage(pooleSockfd);
+        if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
+            perror("Error receiving playlists\n");
+            ksigint();
+        }
+
+        asprintf(&buffer, "%d. %s\n", i+1, frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+
+        sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+
+        frame = receiveMessage(pooleSockfd);
+        if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
+            perror("Error receiving playlists\n");
+            ksigint();
+        }
+
+        int info[2];
+        int i = 0;
+
+        char *token = strtok(frame.data, "&");
+        while (token != NULL) {
+            info[i] = atoi(token);
+            i++;
+            token = strtok(NULL, "&");
+        }
+
+        sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+
+        int num_Frames = info[0];
+        char song_count = 'a';
+
+        for(int i = 0; i < num_Frames; i++){
+            frame = receiveMessage(pooleSockfd);
+
+            int y = 0;
+            char *token = strtok(frame.data, "&");
+
+            while (token != NULL) {
+                asprintf(&buffer, "\t%c. %s\n", song_count, token);
+                write(1, buffer, strlen(buffer));
+                free(buffer);
+                song_count++;
+                y++;
+                token = strtok(NULL, "&");
+            }
+
+            sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
+        }
+    }
 }
 
 void main_menu(){
@@ -201,7 +319,7 @@ void main_menu(){
     while (run) {
         int wordCount = 0;
         int spaceCount = 0;
-        write(1, "$ ", 2);
+        write(1, "\n$ ", 2);
 
         inputLength = read(STDIN_FILENO, buffer, 100);
         buffer[inputLength - 1] = '\0';
@@ -234,7 +352,7 @@ void main_menu(){
 
                 sendMessage(pooleSockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
 
-                asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name); //ERROR: Bowman name does not show
+                asprintf(&printBuffer, "%s connected to HAL 9000 system, welcome music lover!\n", bowman.name);
                 write(1, printBuffer, strlen(printBuffer));
                 free(printBuffer);
             }
@@ -242,6 +360,10 @@ void main_menu(){
 
         else if((strcasecmp(input[0], OPT_LOGOUT) == 0)&&(wordCount == 1)){
             if(connected){
+                asprintf(&printBuffer, "Thanks for using HAL 9000, see you soon, music lover!\n");
+                write(1, printBuffer, strlen(printBuffer));
+                free(printBuffer);
+
                 logout();
                 run = 0;
                 connected = 0;
@@ -255,32 +377,8 @@ void main_menu(){
         else if((strcasecmp(input[0], OPT_LIST_SONGS1) == 0)&&(strcasecmp(input[1], OPT_LIST_SONGS2) == 0)
         &&(wordCount == 2)){
             if(connected){
-                printf("List Songs\n"); //Errase later
-                sendMessage(pooleSockfd, 0x01, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
-
-                Frame frame = receiveMessage(pooleSockfd);
-                printf("Header: %s\n", frame.header);
-                printf("Data: %s\n", frame.data);
-
-                sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
-
-                int num_Frames = atoi(frame.data);
-
-                for(int i = 0; i < num_Frames; i++){
-                    frame = receiveMessage(pooleSockfd);
-
-                    int y = 0;
-                    char *token = strtok(frame.data, "&");
-
-                    while (token != NULL) {
-                        printf("%s\n", token);
-                        y++;
-                        token = strtok(NULL, "&");
-                    }
-
-                    sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
-                }
-
+                sendMessage(pooleSockfd, 0x02, strlen(HEADER_LIST_SONGS), HEADER_LIST_SONGS, bowman.name);
+                listSongs();
             }else{
                 asprintf(&printBuffer, "Cannot List Songs, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -291,8 +389,7 @@ void main_menu(){
         else if((strcasecmp(input[0], OPT_LIST_PLAYLISTS1) == 0)&&(strcasecmp(input[1], OPT_LIST_PLAYLISTS2) == 0)
         &&(wordCount == 2)){
             if(connected){
-                printf("List Playlists\n"); //Errase later
-                sendMessage(pooleSockfd, 0x01, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
+                listPlaylists();
             }else{
                 asprintf(&printBuffer, "Cannot List Playlist, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -346,10 +443,6 @@ int main(int argc, char *argv[]){
     char *buffer;
     char *line;
     int numAmpersand = 0;
-
-    asprintf(&buffer, "\nPID: %d\n", getpid());
-    write(STDOUT_FILENO, buffer, strlen(buffer));
-    free(buffer);
 
     signal(SIGINT, ksigint);
 
@@ -406,32 +499,7 @@ int main(int argc, char *argv[]){
     write(1, buffer, strlen(buffer));
     free(buffer);
 
-    asprintf(&buffer, "\nFile read correctly: \n");
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
-    asprintf(&buffer, "User - %s\n", bowman.name);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
-    asprintf(&buffer, "Directory - %s\n", bowman.folder);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
-    asprintf(&buffer, "IP - %s\n", bowman.ip);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
-    asprintf(&buffer, "Port - %d\n\n", bowman.port);
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
     pooleToConnect = connectToDiscovery();
-
-    /*
-    printf("%s\n", pooleToConnect.name);
-    printf("%s\n", pooleToConnect.ip);
-    printf("%d\n", pooleToConnect.port);*/
 
     main_menu();
     return 0;

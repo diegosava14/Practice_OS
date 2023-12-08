@@ -14,10 +14,32 @@ int discoverySockfd, serverSockfd;
 int *clients;
 int num_clients = 0; 
 fd_set rfds;
-char **toSend; 
-int num_toSend = 0;
-char **frameData;
-int num_frames = 0;
+
+void ksigint(){
+    char *buffer;
+    asprintf(&buffer, "SIGINT received. Closing server...\n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
+    FD_ZERO(&rfds);
+
+    free(poole.nameServer);
+    free(poole.folder);
+    free(poole.ipDiscovery);
+    free(poole.ipPoole);
+
+    for (int i = 0; i < num_clients; i++)
+    {
+        close(clients[i]);
+    }
+    
+    free(clients);
+
+    close(discoverySockfd);
+    close(serverSockfd);
+
+    exit(0);
+}
 
 void connectToDiscovery(){
     uint16_t port;
@@ -65,10 +87,9 @@ void connectToDiscovery(){
 
     Frame frame = receiveMessage(discoverySockfd);
     
-    if(strcmp(frame.header, HEADER_CON_OK) == 0){
-        printf("Connection accepted\n");
-    }else{
-        printf("Connection refused\n");
+    if(strcmp(frame.header, HEADER_CON_OK) != 0){
+        perror("Connection refused");
+        ksigint();
     }
 }
 
@@ -95,18 +116,17 @@ void removeClient(int sockfd) {
     FD_CLR(sockfd, &rfds);
 }
 
-void listSongs(int sockfd){
-    sockfd++;
-    sockfd--;
-
+void listSongs(char *desired_path, int sockfd){
     char *buffer;
     DIR *dir;
     struct dirent *ent;
 
-    asprintf(&buffer, "%s/songs", poole.folder);
-    const char *path = buffer;
+    char **toSend = NULL; 
+    int num_toSend = 0;
+    char **frameData = NULL;
+    int num_frames = 0;
 
-    printf("Path: %s\n", path);
+    const char *path = desired_path;
 
     dir = opendir(path);
 
@@ -126,8 +146,6 @@ void listSongs(int sockfd){
         perror("Unable to open directory");
     }
 
-    free(buffer);
-
     int total_size = 0;
     size_t available = 256 - (3 + strlen(HEADER_SONGS_RESPONSE) + 1);
 
@@ -139,10 +157,6 @@ void listSongs(int sockfd){
     frameData = malloc(sizeof(char *) * num_frames);
     size_t current = available; 
     int index = 0;
-
-    printf("Total size: %d\n", total_size);
-    printf("Available: %ld\n", available);
-    printf("Num frames: %d\n", num_frames);
 
     for(int i=0; i<num_toSend; i++){
         if(strlen(toSend[i])+1 < current){
@@ -177,54 +191,141 @@ void listSongs(int sockfd){
         }
     }
 
+    free(buffer);
+
     char *data; 
-    asprintf(&data, "%d", num_frames);
+    asprintf(&data, "%d&%d", num_frames, num_toSend);
     sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, data);
     free(data);
 
     Frame frame = receiveMessage(sockfd);
-    printf("Header: %s\n", frame.header);
+    if(strcasecmp(frame.header, HEADER_ACK) != 0){
+        perror("Error receiving message");
+        ksigint();
+    }
 
     for(int i=0; i<num_frames; i++){
         sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, frameData[i]);
         Frame frame = receiveMessage(sockfd);
-        printf("Header: %s\n", frame.header);
+        if(strcasecmp(frame.header, HEADER_ACK) != 0){
+            perror("Error receiving message");
+            ksigint();
+        }
     }
+
+    for(int i=0; i<num_toSend; i++){
+        free(toSend[i]);
+    }
+
+    for (int i = 0; i < num_frames; i++)
+    {
+        free(frameData[i]);
+    }
+    
+    free(toSend);
+    free(frameData);
+
+    num_toSend = 0;
+    num_frames = 0;
+}
+
+void listPlaylists(int sockfd){
+    char *buffer;
+    DIR *dir;
+    struct dirent *ent;
+
+    char **toSend = NULL; 
+    int num_toSend = 0;
+
+    asprintf(&buffer, "%s/playlists", poole.folder);
+    const char *path = buffer;
+
+    dir = opendir(path);
+
+    if (dir != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            char *song_name = strdup(ent->d_name);
+            if(strcmp(song_name, ".") != 0 && strcmp(song_name, "..") != 0){
+                toSend = realloc(toSend, sizeof(char *) * (num_toSend + 1));
+                toSend[num_toSend] = strdup(song_name);
+                num_toSend++;
+            }
+            free(song_name);
+        }
+
+        closedir(dir);
+    } else {
+        perror("Unable to open directory");
+    }
+
+    free(buffer);
+
+    char *data; 
+    asprintf(&data, "%d", num_toSend);
+    sendMessage(sockfd, 0x02, strlen(HEADER_PLAYLISTS_RESPONSE), HEADER_PLAYLISTS_RESPONSE, data);
+    free(data);
+
+    Frame frame = receiveMessage(sockfd);
+    if(strcasecmp(frame.header, HEADER_ACK) != 0){
+        perror("Error receiving message");
+        ksigint();
+    }
+
+    for(int i=0; i<num_toSend; i++){
+        sendMessage(sockfd, 0x02, strlen(HEADER_PLAYLISTS_RESPONSE), HEADER_PLAYLISTS_RESPONSE, toSend[i]);
+        Frame frame = receiveMessage(sockfd);
+        if(strcasecmp(frame.header, HEADER_ACK) != 0){
+            perror("Error receiving message");
+            ksigint();
+        }
+
+        char *desired_path;
+        asprintf(&desired_path, "%s/playlists/%s", poole.folder, toSend[i]);
+        listSongs(desired_path, sockfd);
+        free(desired_path);
+    }
+
+    for(int i=0; i<num_toSend; i++){
+        free(toSend[i]);
+    }
+    
+    free(toSend);
+
+    num_toSend = 0;
 
     free(buffer);
 }
 
 void handleFrames(Frame frame, int sockfd){
-    sockfd++;
-    sockfd--;
     char *buffer;
 
-    printf("Header: %s\n", frame.header);
-    printf("Data: %s\n", frame.data);
-
     if (strcmp(frame.header, HEADER_NEW_BOWMAN) == 0) {
-        asprintf(&buffer, "New user connected: %s", frame.data);
+        asprintf(&buffer, "New user connected: %s\n\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
 
     } else if(strcmp(frame.header, HEADER_LIST_SONGS) == 0){
-
         asprintf(&buffer, "New request - %s requires the list of songs.\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
-        asprintf(&buffer, "Sending song list to %s\n", frame.data);
+        asprintf(&buffer, "Sending song list to %s\n\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
 
-        listSongs(sockfd);
+        char *desired_path;
+        asprintf(&desired_path, "%s/songs", poole.folder);
+        listSongs(desired_path, sockfd);
+        free(desired_path);
 
     } else if(strcmp(frame.header, HEADER_LIST_PLAYLISTS) == 0){
-        asprintf(&buffer, "New request - %s requires the list of playlists.", frame.data);
+        asprintf(&buffer, "New request - %s requires the list of playlists.\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
-        asprintf(&buffer, "Sending playlist list to %s", frame.data);
+        asprintf(&buffer, "Sending playlist list to %s\n\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
+
+        listPlaylists(sockfd);
 
     }else if(strcmp(frame.header, HEADER_EXIT) == 0){
         removeClient(sockfd);
@@ -233,14 +334,14 @@ void handleFrames(Frame frame, int sockfd){
 
         close(sockfd);
 
-        asprintf(&buffer, "User %s disconnected.", frame.data);
+        asprintf(&buffer, "User %s disconnected.\n\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
     }
 }
 
 void pooleServer(){
-    char *buffer;
+    //char *buffer;
     //fd_set rfds;
 
     uint16_t port;
@@ -282,15 +383,7 @@ void pooleServer(){
     FD_ZERO(&rfds);
     FD_SET(serverSockfd, &rfds);
 
-    asprintf(&buffer, "Waiting for connections...\n");
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
     while(1){
-        asprintf(&buffer, "\nWe are waiting for a message or customer.\n");
-        write(1, buffer, strlen(buffer));
-        free(buffer);
-
         struct sockaddr_in c_addr;
         socklen_t c_len = sizeof (c_addr);
 
@@ -321,32 +414,6 @@ void pooleServer(){
     }
 }
 
-void ksigint(){
-    char *buffer;
-    asprintf(&buffer, "SIGINT received. Closing server...\n");
-    write(1, buffer, strlen(buffer));
-    free(buffer);
-
-    FD_ZERO(&rfds);
-
-    free(poole.nameServer);
-    free(poole.folder);
-    free(poole.ipDiscovery);
-    free(poole.ipPoole);
-
-    for (int i = 0; i < num_clients; i++)
-    {
-        close(clients[i]);
-    }
-    
-    free(clients);
-
-    close(discoverySockfd);
-    close(serverSockfd);
-
-    exit(0);
-}
-
 int main(int argc, char *argv[]){
     char *buffer;
     char *line;
@@ -368,6 +435,10 @@ int main(int argc, char *argv[]){
         perror("Error opening poole file");
         exit(EXIT_FAILURE);
     }
+
+    asprintf(&buffer, "Reading configuration file...\n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
 
     line = read_until(fd_poole, '\n');
     poole.nameServer = malloc(sizeof(char) * (strlen(line) + 1));
@@ -405,7 +476,15 @@ int main(int argc, char *argv[]){
 
     //SOCKETS
 
+    asprintf(&buffer, "Connecting to %s to the system...\n", poole.nameServer);
+    write(1, buffer, strlen(buffer));
+    free(buffer);
+
     connectToDiscovery();
+
+    asprintf(&buffer, "Connected to HAL 9000 System, ready to listen to Bowmans petitions\n\n");
+    write(1, buffer, strlen(buffer));
+    free(buffer);
 
     pooleServer();
 
