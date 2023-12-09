@@ -118,6 +118,7 @@ int initBowmanSocket(){
 }
 
 void discoveryMenu(int sockfd){
+    freeFrame(frame);
     frame = receiveMessage(sockfd);
 
     printf("\nType: %d\n", frame.type);

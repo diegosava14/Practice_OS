@@ -109,6 +109,7 @@ PooleToConnect connectToDiscovery(){
     sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
     free(data);
 
+    freeFrame(frame);
     frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
     if(strcmp(frame.header, HEADER_CON_OK) != 0){
         perror("Connection refused");
@@ -178,6 +179,7 @@ int connectToPoole(PooleToConnect poole){
 void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
 
+    freeFrame(frame);
     frame = receiveMessage(pooleSockfd);
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from poole\n");
@@ -186,6 +188,7 @@ void logout(){
     
     sendMessage(discoverySockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, pooleToConnect.name);
 
+    freeFrame(frame);
     frame = receiveMessage(discoverySockfd);
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from discovery\n");
@@ -196,6 +199,7 @@ void logout(){
 void listSongs(){
     char *buffer; 
 
+    freeFrame(frame);
     frame = receiveMessage(pooleSockfd);
     if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
         perror("Error receiving songs\n");
@@ -222,6 +226,7 @@ void listSongs(){
     int song_count = 0;
 
     for(int i = 0; i < num_Frames; i++){
+        freeFrame(frame);
         frame = receiveMessage(pooleSockfd);
 
         int y = 0;
@@ -244,6 +249,7 @@ void listPlaylists(){
     char *buffer; 
     sendMessage(pooleSockfd, 0x02, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
 
+    freeFrame(frame);
     frame = receiveMessage(pooleSockfd);
     if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
         perror("Error receiving playlists\n");
@@ -259,6 +265,7 @@ void listPlaylists(){
     sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
 
     for(int i=0; i<num_playlists; i++){
+        freeFrame(frame);
         frame = receiveMessage(pooleSockfd);
         if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
@@ -271,6 +278,7 @@ void listPlaylists(){
 
         sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
 
+        freeFrame(frame);
         frame = receiveMessage(pooleSockfd);
         if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
@@ -293,6 +301,7 @@ void listPlaylists(){
         char song_count = 'a';
 
         for(int i = 0; i < num_Frames; i++){
+            freeFrame(frame);
             frame = receiveMessage(pooleSockfd);
 
             int y = 0;

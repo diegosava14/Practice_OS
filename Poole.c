@@ -88,6 +88,7 @@ void connectToDiscovery(){
     sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
     free(data);
 
+    freeFrame(frame);
     frame = receiveMessage(discoverySockfd);
     
     if(strcmp(frame.header, HEADER_CON_OK) != 0){
@@ -169,12 +170,23 @@ void listSongs(char *desired_path, int sockfd){
                 asprintf(&buffer, "%s", toSend[i]);
             }else if(i == num_toSend - 1){
                 //last one
-                asprintf(&buffer, "%s&%s", buffer, toSend[i]);
+                int bufferSize = strlen(buffer); 
+                char currentBuffer[bufferSize];
+                strcpy(currentBuffer, buffer);
+                free(buffer);
+
+                asprintf(&buffer, "%s&%s", currentBuffer, toSend[i]);
                 frameData[index] = strdup(buffer);
             }else{
                 //general
                 current -= strlen(toSend[i])+1;
-                asprintf(&buffer, "%s&%s", buffer, toSend[i]);
+
+                int bufferSize = strlen(buffer); 
+                char currentBuffer[bufferSize];
+                strcpy(currentBuffer, buffer);
+                free(buffer);
+
+                asprintf(&buffer, "%s&%s", currentBuffer, toSend[i]);
             }
         }else{
             //doesn't fit in current frame
@@ -182,6 +194,8 @@ void listSongs(char *desired_path, int sockfd){
                 frameData[index] = strdup(buffer);
                 index++;
                 current = available - strlen(toSend[i]);
+
+                free(buffer);
                 asprintf(&buffer, "%s", toSend[i]);
                 frameData[index] = strdup(buffer);
 
@@ -189,6 +203,8 @@ void listSongs(char *desired_path, int sockfd){
                 frameData[index] = strdup(buffer);
                 index++;
                 current = available - strlen(toSend[i]);
+
+                free(buffer);
                 asprintf(&buffer, "%s", toSend[i]);
             }
         }
@@ -201,6 +217,7 @@ void listSongs(char *desired_path, int sockfd){
     sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, data);
     free(data);
 
+    freeFrame(frame);
     frame = receiveMessage(sockfd);
     if(strcasecmp(frame.header, HEADER_ACK) != 0){
         perror("Error receiving message");
@@ -209,6 +226,7 @@ void listSongs(char *desired_path, int sockfd){
 
     for(int i=0; i<num_frames; i++){
         sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, frameData[i]);
+        freeFrame(frame);
         frame = receiveMessage(sockfd);
         if(strcasecmp(frame.header, HEADER_ACK) != 0){
             perror("Error receiving message");
@@ -268,6 +286,7 @@ void listPlaylists(int sockfd){
     sendMessage(sockfd, 0x02, strlen(HEADER_PLAYLISTS_RESPONSE), HEADER_PLAYLISTS_RESPONSE, data);
     free(data);
 
+    freeFrame(frame);
     frame = receiveMessage(sockfd);
     if(strcasecmp(frame.header, HEADER_ACK) != 0){
         perror("Error receiving message");
@@ -276,6 +295,7 @@ void listPlaylists(int sockfd){
 
     for(int i=0; i<num_toSend; i++){
         sendMessage(sockfd, 0x02, strlen(HEADER_PLAYLISTS_RESPONSE), HEADER_PLAYLISTS_RESPONSE, toSend[i]);
+        freeFrame(frame);
         frame = receiveMessage(sockfd);
         if(strcasecmp(frame.header, HEADER_ACK) != 0){
             perror("Error receiving message");
@@ -407,6 +427,7 @@ void pooleServer(){
                     FD_SET(newsock, &rfds);
                 }else{
                     //handle bowman frames, menu(i) i is the fd of the bowman
+                    freeFrame(frame);
                     frame = receiveMessage(i);
                     handleFrames(frame, i);
                 }
