@@ -13,6 +13,7 @@ typedef struct{
     int port;
 }PooleToConnect; 
 
+Frame frame;
 Bowman bowman;
 PooleToConnect pooleToConnect;
 int discoverySockfd, pooleSockfd;
@@ -29,6 +30,8 @@ void ksigint(){
 
     close(discoverySockfd);
     close(pooleSockfd);
+
+    freeFrame(frame);
 
     exit(EXIT_SUCCESS);
 }
@@ -106,7 +109,7 @@ PooleToConnect connectToDiscovery(){
     sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
     free(data);
 
-    Frame frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
+    frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
     if(strcmp(frame.header, HEADER_CON_OK) != 0){
         perror("Connection refused");
         ksigint();
@@ -175,7 +178,7 @@ int connectToPoole(PooleToConnect poole){
 void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
 
-    Frame frame = receiveMessage(pooleSockfd);
+    frame = receiveMessage(pooleSockfd);
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from poole\n");
         ksigint();
@@ -193,7 +196,7 @@ void logout(){
 void listSongs(){
     char *buffer; 
 
-    Frame frame = receiveMessage(pooleSockfd);
+    frame = receiveMessage(pooleSockfd);
     if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
         perror("Error receiving songs\n");
         ksigint();
@@ -241,7 +244,7 @@ void listPlaylists(){
     char *buffer; 
     sendMessage(pooleSockfd, 0x02, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
 
-    Frame frame = receiveMessage(pooleSockfd);
+    frame = receiveMessage(pooleSockfd);
     if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
         perror("Error receiving playlists\n");
         ksigint();
@@ -256,7 +259,7 @@ void listPlaylists(){
     sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
 
     for(int i=0; i<num_playlists; i++){
-        Frame frame = receiveMessage(pooleSockfd);
+        frame = receiveMessage(pooleSockfd);
         if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
             ksigint();
@@ -367,6 +370,7 @@ void main_menu(){
                 logout();
                 run = 0;
                 connected = 0;
+                ksigint();
             }else{
                 asprintf(&printBuffer, "Cannot Logout, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -435,8 +439,6 @@ void main_menu(){
             free(printBuffer);
         }
     }
-
-    ksigint();
 }
 
 int main(int argc, char *argv[]){

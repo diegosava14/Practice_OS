@@ -14,6 +14,7 @@ typedef struct{
     int connnections;
 }PooleServer; 
 
+Frame frame; 
 PooleServer **servers;
 int num_servers = 0;
 Discovery discovery;
@@ -21,6 +22,34 @@ int pooleSockfd, bowmanSockfd;
 fd_set rfds;
 int *clients;
 int num_clients = 0;
+
+void ksigint(){
+    FD_ZERO(&rfds);
+
+    close(pooleSockfd);
+    close(bowmanSockfd);
+
+    for(int i=0; i<num_servers; i++){
+        free(servers[i]->name);
+        free(servers[i]->ip);
+        free(servers[i]);
+    }
+
+    for (int i = 0; i < num_clients; i++)
+    {
+        close(clients[i]);
+    }
+    
+    free(clients);
+    free(servers);
+
+    free(discovery.ipPoole);
+    free(discovery.ipBowman);
+
+    freeFrame(frame);
+
+    exit(0);
+}
 
 int initPooleSocket(){
     printf("Port: %d\n", discovery.portPoole);
@@ -89,7 +118,7 @@ int initBowmanSocket(){
 }
 
 void discoveryMenu(int sockfd){
-    Frame frame = receiveMessage(sockfd);
+    frame = receiveMessage(sockfd);
 
     printf("\nType: %d\n", frame.type);
     printf("Header: %s\n", frame.header);
@@ -204,33 +233,6 @@ void discoveryServer() {
             }
         }
     }
-}
-
-
-void ksigint(){
-    FD_ZERO(&rfds);
-
-    close(pooleSockfd);
-    close(bowmanSockfd);
-
-    for(int i=0; i<num_servers; i++){
-        free(servers[i]->name);
-        free(servers[i]->ip);
-        free(servers[i]);
-    }
-
-    for (int i = 0; i < num_clients; i++)
-    {
-        close(clients[i]);
-    }
-    
-    free(clients);
-    free(servers);
-
-    free(discovery.ipPoole);
-    free(discovery.ipBowman);
-
-    exit(0);
 }
 
 int main(int argc, char *argv[]){

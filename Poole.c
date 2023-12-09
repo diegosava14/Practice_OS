@@ -9,6 +9,7 @@ typedef struct{
     int portPoole;
 }Poole;
 
+Frame frame;
 Poole poole;
 int discoverySockfd, serverSockfd;
 int *clients;
@@ -37,6 +38,8 @@ void ksigint(){
 
     close(discoverySockfd);
     close(serverSockfd);
+
+    freeFrame(frame);
 
     exit(0);
 }
@@ -85,7 +88,7 @@ void connectToDiscovery(){
     sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
     free(data);
 
-    Frame frame = receiveMessage(discoverySockfd);
+    frame = receiveMessage(discoverySockfd);
     
     if(strcmp(frame.header, HEADER_CON_OK) != 0){
         perror("Connection refused");
@@ -198,7 +201,7 @@ void listSongs(char *desired_path, int sockfd){
     sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, data);
     free(data);
 
-    Frame frame = receiveMessage(sockfd);
+    frame = receiveMessage(sockfd);
     if(strcasecmp(frame.header, HEADER_ACK) != 0){
         perror("Error receiving message");
         ksigint();
@@ -206,7 +209,7 @@ void listSongs(char *desired_path, int sockfd){
 
     for(int i=0; i<num_frames; i++){
         sendMessage(sockfd, 0x02, strlen(HEADER_SONGS_RESPONSE), HEADER_SONGS_RESPONSE, frameData[i]);
-        Frame frame = receiveMessage(sockfd);
+        frame = receiveMessage(sockfd);
         if(strcasecmp(frame.header, HEADER_ACK) != 0){
             perror("Error receiving message");
             ksigint();
@@ -265,7 +268,7 @@ void listPlaylists(int sockfd){
     sendMessage(sockfd, 0x02, strlen(HEADER_PLAYLISTS_RESPONSE), HEADER_PLAYLISTS_RESPONSE, data);
     free(data);
 
-    Frame frame = receiveMessage(sockfd);
+    frame = receiveMessage(sockfd);
     if(strcasecmp(frame.header, HEADER_ACK) != 0){
         perror("Error receiving message");
         ksigint();
@@ -273,7 +276,7 @@ void listPlaylists(int sockfd){
 
     for(int i=0; i<num_toSend; i++){
         sendMessage(sockfd, 0x02, strlen(HEADER_PLAYLISTS_RESPONSE), HEADER_PLAYLISTS_RESPONSE, toSend[i]);
-        Frame frame = receiveMessage(sockfd);
+        frame = receiveMessage(sockfd);
         if(strcasecmp(frame.header, HEADER_ACK) != 0){
             perror("Error receiving message");
             ksigint();
@@ -292,8 +295,6 @@ void listPlaylists(int sockfd){
     free(toSend);
 
     num_toSend = 0;
-
-    free(buffer);
 }
 
 void handleFrames(Frame frame, int sockfd){
@@ -406,7 +407,7 @@ void pooleServer(){
                     FD_SET(newsock, &rfds);
                 }else{
                     //handle bowman frames, menu(i) i is the fd of the bowman
-                    Frame frame = receiveMessage(i);
+                    frame = receiveMessage(i);
                     handleFrames(frame, i);
                 }
             }

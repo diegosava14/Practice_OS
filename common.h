@@ -56,4 +56,6 @@ Frame frameTranslation(char message[256]);
 
 Frame receiveMessage(int sockfd);
 
+void freeFrame(Frame frame);
+
 #endif

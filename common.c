@@ -61,6 +61,12 @@ Frame frameTranslation(char message[256]){
         return frame;
     }else{
         frame.data = strdup(&message[3 + frame.headerLength]);
+
+        /*
+        int dataSize = strlen(&message[3 + frame.headerLength+1]);
+        frame.data = malloc(dataSize + 1);
+        strncpy(frame.data, &message[3 + frame.headerLength+1], dataSize);
+        frame.data[dataSize] = '\0';*/
     }
 
     return frame;
@@ -69,8 +75,6 @@ Frame frameTranslation(char message[256]){
 Frame receiveMessage(int sockfd){
     char message[256];
     int size = read(sockfd, message, 256);
-
-    //printf("Total size of message received: %d\n", size);
 
     if(size == 0){
         Frame frame;
@@ -82,4 +86,16 @@ Frame receiveMessage(int sockfd){
     }
 
     return frameTranslation(message);
+}
+
+void freeFrame(Frame frame) {
+    if (frame.header != NULL) {
+        free(frame.header);
+        frame.header = NULL;
+    }
+
+    if (frame.data != NULL) {
+        free(frame.data);
+        frame.data = NULL;
+    }
 }
