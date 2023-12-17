@@ -13,6 +13,12 @@ typedef struct{
     int port;
 }PooleToConnect; 
 
+typedef struct {
+    int socket_fd;         
+    char file_name[256];    
+    int totalFileSize;   
+} DownloadArgs;
+
 Frame frame;
 Bowman bowman;
 PooleToConnect pooleToConnect;
@@ -96,8 +102,6 @@ PooleToConnect connectToDiscovery(){
     s_addr.sin_port = htons (port);
     s_addr.sin_addr = ip_addr;
 
-    // We can connect to the server casting the struct:
-    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
     if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
     {
         perror ("connect");
@@ -150,7 +154,7 @@ int connectToPoole(PooleToConnect poole){
         exit (EXIT_FAILURE);
     }
 
-    // Create the socket
+
     int sockfd;
     sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0)
@@ -165,8 +169,6 @@ int connectToPoole(PooleToConnect poole){
     s_addr.sin_port = htons (port);
     s_addr.sin_addr = ip_addr;
 
-    // We can connect to the server casting the struct:
-    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
     if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
     {
         perror ("connect");
@@ -321,19 +323,82 @@ void listPlaylists(){
     }
 }
 
+
+// void update_progress_bar(int bytesReceived, int totalFileSize) {
+//     int percentage = (100 * bytesReceived) / totalFileSize;
+//     char progressBar[51];
+//     memset(progressBar, '=', percentage / 2);
+//     progressBar[percentage / 2] = '\0';
+//     char output[100];
+//     snprintf(output, sizeof(output), "\r[%-50s] %d%%", progressBar, percentage);
+//     write(STDOUT_FILENO, output, strlen(output)); // Use write() to STDOUT
+// }
+
+
+void download(){
+
+    freeFrame(frame);
+    frame = receiveMessage(pooleSockfd);
+
+    if (strcmp(frame.header, HEADER_FILE_NOT_FOUND) == 0) {
+        write(1,frame.data, strlen(frame.data));
+        return;
+    }
+
+    if(strcasecmp(frame.header, HEADER_NEW_FILE) != 0){
+        perror("Error receiving file\n");
+        ksigint();
+    } 
+    //printf("Frame: %s\n", frame.data);
+
+    int i = 0;
+    char *info[4];
+    char *token = strtok(frame.data, "&");
+
+    while (token != NULL) {
+        info[i] = token;
+        i++;
+        token = strtok(NULL, "&");
+    }
+
+    char *file_name = info[0];
+    int file_size = atoi(info[1]);
+    char *MD5SUM = info[2];
+    int id = atoi(info[3]);
+
+    printf("File name: %s\n", file_name);
+    printf("File size: %d\n", file_size);
+    printf("MD5SUM: %s\n", MD5SUM);
+    printf("ID: %d\n", id);
+
+
+    // while (1) {
+    //     frame = receiveMessage(pooleSockfd);
+    //     printf("Frame: %s\n", frame.data);
+
+    //     if (read(pooleSockfd, frame.data, 256) == 0) {
+    //         break;
+    //     }
+    // }
+
+
+}
+
+
+
 void main_menu(){
     int run = 1; 
     int connected = 0;
     int inputLength;
     char *printBuffer;
-    char buffer[100];
+    char buffer[200];
 
     while (run) {
         int wordCount = 0;
         int spaceCount = 0;
         write(1, "\n$ ", 2);
 
-        inputLength = read(STDIN_FILENO, buffer, 100);
+        inputLength = read(STDIN_FILENO, buffer, 200);
         buffer[inputLength - 1] = '\0';
 
         if (inputLength > 0) {
@@ -341,17 +406,26 @@ void main_menu(){
                 if (buffer[j] == ' ') {
                     spaceCount++;
                 }
+            } 
+        }
+
+        char *input[spaceCount + 1];    
+
+        if (strcasestr(buffer, "DOWNLOAD") == NULL) { 
+            char *token = strtok(buffer, " \t");
+            while (token != NULL && wordCount < spaceCount + 1) {
+                input[wordCount] = token;
+                token = strtok(NULL, " \t");
+                wordCount++;
             }
+        } else {
+            spaceCount = 1;
+            input[0] = malloc(sizeof(char) * 9);
+            input[1] = malloc(sizeof(char) * (inputLength - 9));
+            strcpy(input[0], "DOWNLOAD");
+            strcpy(input[1], buffer + 9);
         }
 
-        char *input[spaceCount + 1];
-        char *token = strtok(buffer, " \t");
-
-        while (token != NULL && wordCount < spaceCount + 1) {
-            input[wordCount] = token;
-            token = strtok(NULL, " \t");
-            wordCount++;
-        }
 
         if((strcasecmp(input[0], OPT_CONNECT) == 0)&&(wordCount == 1)){
             if(connected){
@@ -410,9 +484,22 @@ void main_menu(){
             }
         }
 
-        else if((strcasecmp(input[0], OPT_DOWNLOAD) == 0)&&(wordCount == 2)){
+        else if((strcasecmp(input[0], OPT_DOWNLOAD) == 0)){
             if(connected){
 
+                if (strstr(input[1], ".mp3") != NULL) {
+                    printf("Downloading %s\n", input[1]);
+                    sendMessage(pooleSockfd, 0x03, strlen(HEADER_DOWNLOAD_SONG), HEADER_DOWNLOAD_SONG, input[1]);
+
+                    download();
+                } else {
+                    //download playlist
+                    // sendMessage(pooleSockfd, 0x03, strlen(HEADER_DOWNLOAD_PLAYLIST), HEADER_DOWNLOAD_PLAYLIST, input[1]);
+                    // printf("Downloading %s playlist\n", input[1]);
+
+                }
+
+                
             }else{
                 asprintf(&printBuffer, "Cannot Download, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));

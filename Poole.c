@@ -9,6 +9,12 @@ typedef struct{
     int portPoole;
 }Poole;
 
+typedef struct{
+    int sockfd;
+    char file_path[256];
+    int id;
+} DownloadThread;
+
 Frame frame;
 Poole poole;
 int discoverySockfd, serverSockfd;
@@ -317,6 +323,86 @@ void listPlaylists(int sockfd){
     num_toSend = 0;
 }
 
+// void* dowloadThread(void* args){
+//     int sockfd = ((DownloadThread *)args)->sockfd;
+//     char *file_path = ((DownloadThread *)args)->file_path;
+//     int id = ((DownloadThread *)args)->id;
+
+//     int chunk_size = 256 - (3 + strlen(HEADER_FILE_DATA) + 1);
+    
+//     int fd = open(file_path, O_RDONLY);
+//     char* buffer = malloc(sizeof(char) * chunk_size);
+//     asprintf(&buffer, "%d&", id);
+
+
+//     while (read(fd, buffer, chunk_size-1) > 0) {
+
+//         sendMessage(sockfd, 0x04, strlen(HEADER_FILE_DATA), HEADER_FILE_DATA, buffer);
+//         printf("Frame: %s", buffer);
+//         free(buffer);
+//         freeFrame(frame);
+//     }
+
+//     close(fd);
+
+//     return NULL;
+
+// }
+
+
+void startSending(int sockfd, char *song_name){
+    int id = rand() % 1000;
+
+    char *desired_path;
+    asprintf(&desired_path, "%s/songs/%s", poole.folder, song_name);
+    int fd = open(desired_path, O_RDONLY);
+
+    ssize_t file_size = lseek(fd, 0, SEEK_END);
+    printf("File size: %ld\n", file_size);
+    char *file_size_str;
+    asprintf(&file_size_str, "%ld", file_size);
+
+    //md5sum
+
+    char *data;
+    asprintf(&data, "%s&%s&%s&%d", song_name, file_size_str, "MD5SUM", id);
+    printf("Data: %s\n", data);
+
+    sendMessage(sockfd, 0x04, strlen(HEADER_NEW_FILE), HEADER_NEW_FILE, data);
+        
+    free(file_size_str);
+    free(data);
+
+    // pthread_t thread;
+
+    // DownloadThread *args = malloc(sizeof(DownloadThread));
+
+    // if (args == NULL){
+    //     perror("Error allocating memory for download thread");
+    //     ksigint();
+    // }
+
+    // args->sockfd = sockfd;
+    // strcpy(args->file_path, desired_path);
+    // args->file_path[strlen(args->file_path)] = '\0';
+    // args->id = id;
+
+    // if (pthread_create(&thread, NULL, dowloadThread, args) != 0){
+    //     perror("Error creating download thread");
+    //     ksigint();
+    // }
+
+    // pthread_detach(thread);
+
+}
+
+
+bool fileCheck(char *song){
+    char *desired_path;
+    asprintf(&desired_path, "%s/songs/%s", poole.folder, song);
+    return access(desired_path, F_OK) == 0;
+}
+
 void handleFrames(Frame frame, int sockfd){
     char *buffer;
 
@@ -358,6 +444,25 @@ void handleFrames(Frame frame, int sockfd){
         asprintf(&buffer, "User %s disconnected.\n\n", frame.data);
         write(1, buffer, strlen(buffer));
         free(buffer);
+
+    } else if (strcmp(frame.header, HEADER_DOWNLOAD_SONG) == 0) {
+
+        asprintf(&buffer, "New request - *user* wants to download %s.\n", frame.data);
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+
+        if (!fileCheck(frame.data)) {
+            asprintf(&buffer, "No %s song found.\n", frame.data);
+            write(1, buffer, strlen(buffer));
+            free(buffer);
+
+            asprintf(&buffer, "Please input a valid download.\n");
+            sendMessage(sockfd, 0x04, strlen(HEADER_FILE_NOT_FOUND), HEADER_FILE_NOT_FOUND, buffer);
+            free(buffer);
+        } else {
+            startSending(sockfd, frame.data);
+        }
+        
     }
 }
 
@@ -374,7 +479,6 @@ void pooleServer(){
     }
     port = aux;
 
-    // Create the socket
     serverSockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (serverSockfd < 0)
     {
@@ -382,16 +486,12 @@ void pooleServer(){
         exit (EXIT_FAILURE);
     }
 
-    // Specify the adress and port of the socket
-    // We'll admit connexions to any IP of our machine in the specified port
     struct sockaddr_in s_addr;
     bzero (&s_addr, sizeof (s_addr));
     s_addr.sin_family = AF_INET;
     s_addr.sin_port = htons (port);
     s_addr.sin_addr.s_addr = INADDR_ANY;
 
-    // When executing bind, we should add a cast:
-    // bind waits for a struct sockaddr* and we are passing a struct sockaddr_in*
     if (bind (serverSockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
     {
         perror ("bind");
@@ -435,6 +535,8 @@ void pooleServer(){
         }
     }
 }
+
+
 
 int main(int argc, char *argv[]){
     char *buffer;

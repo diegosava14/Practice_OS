@@ -166,7 +166,7 @@ void discoveryMenu(int sockfd){
         servers[index]->connnections++;
         char *data;
         asprintf(&data, "%s&%s&%d", servers[index]->name, servers[index]->ip, servers[index]->port);
-        //printf("Sending %s to bowman\n", data);
+        printf("Sending %s to bowman\n", data);
         sendMessage(sockfd, 0x01, strlen(HEADER_CON_OK), HEADER_CON_OK, data);
         free(data);
 

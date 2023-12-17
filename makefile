@@ -8,7 +8,7 @@ Bowman: Bowman.c common.c common.h
 	$(CC) Bowman.c common.c -o Bowman $(CFLAGS)
 
 Poole: Poole.c common.c common.h
-	$(CC) Poole.c common.c -o Poole $(CFLAGS)
+	$(CC) Poole.c common.c -o Poole $(CFLAGS_THREADS)
 
 Discovery: Discovery.c common.c common.h
 	$(CC) Discovery.c common.c -o Discovery $(CFLAGS_THREADS)

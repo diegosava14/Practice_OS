@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <strings.h>
 #include <dirent.h>
+#include <stdbool.h>
 
 #define OPT_CONNECT "CONNECT"
 #define OPT_CHECK_DOWNLOADS1 "CHECK"
@@ -40,6 +41,11 @@
 #define HEADER_SONGS_RESPONSE "SONGS_RESPONSE"
 #define HEADER_LIST_PLAYLISTS "LIST_PLAYLISTS" 
 #define HEADER_PLAYLISTS_RESPONSE "PLAYLISTS_RESPONSE"
+#define HEADER_DOWNLOAD_SONG "DOWNLOAD_SONG"
+#define HEADER_DOWNLOAD_PLAYLIST "DOWNLOAD_PLAYLIST"
+#define HEADER_NEW_FILE "NEW_FILE"
+#define HEADER_FILE_NOT_FOUND "FILE_NOT_FOUND"
+#define HEADER_FILE_DATA "FILE_DATA"
 
 typedef struct{
     uint8_t type;
@@ -48,7 +54,7 @@ typedef struct{
     char *data;
 }Frame; 
 
-char * read_until(int fd, char end);
+char *read_until(int fd, char end);
 
 void sendMessage(int sockfd, uint8_t type, uint16_t headerLength, const char *constantHeader, char *data);
 
