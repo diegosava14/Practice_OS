@@ -323,35 +323,72 @@ void listPlaylists(int sockfd){
     num_toSend = 0;
 }
 
-// void* dowloadThread(void* args){
-//     int sockfd = ((DownloadThread *)args)->sockfd;
-//     char *file_path = ((DownloadThread *)args)->file_path;
-//     int id = ((DownloadThread *)args)->id;
+int chunkNumber;
 
-//     int chunk_size = 256 - (3 + strlen(HEADER_FILE_DATA) + 1);
-    
-//     int fd = open(file_path, O_RDONLY);
-//     char* buffer = malloc(sizeof(char) * chunk_size);
-//     asprintf(&buffer, "%d&", id);
+void* downloadThread(void* args){
+    DownloadThread *arguments = (DownloadThread *) args;
+    char *file_path = arguments->file_path;
+    int id = arguments->id;
 
+    int fd = open(file_path, O_RDONLY);
+    if (fd == -1){
+        perror("Error opening file");
+        ksigint();
+    }
 
-//     while (read(fd, buffer, chunk_size-1) > 0) {
+    ssize_t bytesRead;
+    int id_net = htonl(id);
+    char ampersand = '&';
+    char dataBuffer[256 - (3 + strlen(HEADER_FILE_DATA) + 1 + sizeof(id_net) + 1)]; 
+    char message[256];
 
-//         sendMessage(sockfd, 0x04, strlen(HEADER_FILE_DATA), HEADER_FILE_DATA, buffer);
-//         printf("Frame: %s", buffer);
-//         free(buffer);
-//         freeFrame(frame);
-//     }
+    while ((bytesRead = read(fd, dataBuffer, sizeof(dataBuffer))) > 0) {
+        uint8_t type = 0x04;
+        int headerLength = strlen(HEADER_FILE_DATA); 
 
-//     close(fd);
+        message[0] = type;
+        message[1] = headerLength & 0xFF;
+        message[2] = (headerLength >> 8) & 0xFF;
 
-//     return NULL;
+        memcpy(&message[3], HEADER_FILE_DATA, strlen(HEADER_FILE_DATA));
+        message[3 + strlen(HEADER_FILE_DATA)] = '\0';
 
-// }
+        memcpy(&message[3 + strlen(HEADER_FILE_DATA) + 1], &id_net, sizeof(id_net));
+        printf("id_net: %d\n", id_net);
+        memcpy(&message[3 + strlen(HEADER_FILE_DATA) + 1 + sizeof(id_net)], &ampersand, 1);
+        memcpy(&message[3 + strlen(HEADER_FILE_DATA) + 1 + sizeof(id_net) + 1], dataBuffer, bytesRead);
+
+        size_t totalLength = 3 + strlen(HEADER_FILE_DATA) + 1 + sizeof(id_net) + 1 + bytesRead;
+        while (totalLength < 256) {
+            message[totalLength] = '\0';
+            totalLength++;
+        }
+        write(arguments->sockfd, message, totalLength);
+
+        printf("\nRaw message data: ");
+        for (long unsigned int i = 0; i < totalLength; i++){
+            printf("%02x ", (unsigned char)message[i]);
+        }
+        printf("\n");
+        printf("Chunks sent: %d\n", chunkNumber);
+        chunkNumber++;
+    }
+    //printf("Chunks sent: %d\n", chunkNumber);
+
+    if (bytesRead == -1){
+        perror("Error reading file");
+    }
+
+    close(fd);
+    free(arguments);
+    return NULL;    
+}
+
 
 
 void startSending(int sockfd, char *song_name){
     int id = rand() % 1000;
+    chunkNumber = 0;
 
     char *desired_path;
     asprintf(&desired_path, "%s/songs/%s", poole.folder, song_name);
@@ -372,27 +409,29 @@ void startSending(int sockfd, char *song_name){
         
     free(file_size_str);
     free(data);
+    pthread_t thread;
 
-    // pthread_t thread;
+    DownloadThread *args = malloc(sizeof(DownloadThread));
 
-    // DownloadThread *args = malloc(sizeof(DownloadThread));
+    if (args == NULL){
+        perror("Error allocating memory for download thread");
+        ksigint();
+    }
 
-    // if (args == NULL){
-    //     perror("Error allocating memory for download thread");
-    //     ksigint();
-    // }
+    args->sockfd = sockfd;
+    strcpy(args->file_path, desired_path);
+    args->file_path[strlen(args->file_path)] = '\0';
+    args->id = id;
 
-    // args->sockfd = sockfd;
-    // strcpy(args->file_path, desired_path);
-    // args->file_path[strlen(args->file_path)] = '\0';
-    // args->id = id;
+    printf("Sending first frame: %s\n", args->file_path);
 
-    // if (pthread_create(&thread, NULL, dowloadThread, args) != 0){
-    //     perror("Error creating download thread");
-    //     ksigint();
-    // }
+    if (pthread_create(&thread, NULL, downloadThread, args) != 0){
+        perror("Error creating download thread");
+        free(args);
+        ksigint();
+    }
 
-    // pthread_detach(thread);
+    pthread_detach(thread);
 
 }
 

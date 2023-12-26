@@ -16,6 +16,9 @@
 #include <strings.h>
 #include <dirent.h>
 #include <stdbool.h>
+#include <sys/stat.h> 
+#include <sys/types.h> 
+#include <errno.h>
 
 #define OPT_CONNECT "CONNECT"
 #define OPT_CHECK_DOWNLOADS1 "CHECK"

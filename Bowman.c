@@ -331,7 +331,7 @@ void listPlaylists(){
 //     progressBar[percentage / 2] = '\0';
 //     char output[100];
 //     snprintf(output, sizeof(output), "\r[%-50s] %d%%", progressBar, percentage);
-//     write(STDOUT_FILENO, output, strlen(output)); // Use write() to STDOUT
+//     write(STDOUT_FILENO, output, strlen(output));
 // }
 
 
@@ -370,17 +370,104 @@ void download(){
     printf("File size: %d\n", file_size);
     printf("MD5SUM: %s\n", MD5SUM);
     printf("ID: %d\n", id);
+    
+    char *directory_path;
+    asprintf(&directory_path, "%s/", bowman.name);
+    printf("Directory path: %s\n", directory_path);
+    if (mkdir(directory_path, 0777) == -1 && errno != EEXIST) {
+        perror("Error creating directory");
+        ksigint();
+    }
+    free(directory_path);
 
+    asprintf(&directory_path, "%s/songs", bowman.name);
+    printf("Directory path: %s\n", directory_path);
 
-    // while (1) {
-    //     frame = receiveMessage(pooleSockfd);
-    //     printf("Frame: %s\n", frame.data);
+    if (mkdir(directory_path, 0777) == -1 && errno != EEXIST) {
+        perror("Error creating directory");
+        ksigint();
+    }
 
-    //     if (read(pooleSockfd, frame.data, 256) == 0) {
-    //         break;
-    //     }
-    // }
+    char *desired_path;
+    asprintf(&desired_path, "%s/%s", directory_path, file_name);
 
+    printf("Desired path: %s\n", desired_path);
+
+   int fd = open(desired_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd == -1) {
+        perror("Error opening file");
+        ksigint();
+    }
+
+    int bytesReceived = 0;
+    int chunkCount = 0;
+
+    while (bytesReceived < file_size) {
+
+        char buffer[256];
+        memset(buffer, 0, sizeof(buffer));
+        ssize_t size = read(pooleSockfd, buffer, 256);
+
+        Frame frame;
+        frame.type = buffer[0];
+    
+        printf("Size: %ld\n", size);
+
+        printf("Raw buffer data: ");
+        for (int i = 0; i < size; ++i) {
+            printf("%02x ", (unsigned char)buffer[i]);
+        }
+        printf("\n");
+
+        frame.type = buffer[0];
+        //printf("Frame type: %d\n", frame.type);
+        frame.headerLength = (buffer[2] << 8) | buffer[1];
+        //printf("Frame header length: %d\n", frame.headerLength);
+        frame.header = malloc(frame.headerLength);
+        memcpy(frame.header, &buffer[3], frame.headerLength);
+        frame.header[frame.headerLength] = '\0';
+        // printf("Frame header: %s\n", frame.header);
+
+        // printf("calc: %ld\n", size - 3 - frame.headerLength);
+
+        frame.data = malloc(size - 3 - frame.headerLength);
+        if (frame.data == NULL) {
+                perror("Memory allocation failed for frame.data");
+                ksigint();
+        }
+        memcpy(frame.data, &buffer[3 + frame.headerLength + 1], size - 3 - frame.headerLength - 1);
+
+        int chunk_id;
+        memcpy(&chunk_id, frame.data, sizeof(chunk_id));
+        chunk_id = ntohl(chunk_id); 
+        printf("Chunk id: %d\n", chunk_id);
+
+        size_t data_length = size - 3 - frame.headerLength - sizeof(chunk_id) - 1 - 1;
+            // printf("Data length: %ld\n", data_length);
+
+        printf("-->Frame data: ");
+        for (unsigned long int i = 0; i < data_length; ++i) {
+            printf("%02x ", (unsigned char)frame.data[i + sizeof(chunk_id) + 1]);
+        }
+        printf("\n");
+
+        if ((long unsigned)bytesReceived + data_length > (long unsigned)file_size) {
+            data_length = file_size - bytesReceived;
+        }
+        write(fd, frame.data + sizeof(chunk_id) + 1, data_length);
+
+        bytesReceived += data_length;
+        printf("Bytes received: %d\n", bytesReceived);
+        printf("File size: %d\n", file_size);
+        printf("Chunk count: %d\n\n", chunkCount);
+        chunkCount++;
+        
+        freeFrame(frame);
+        
+     }
+
+    close(fd);
+    // MD5 checksum
 
 }
 
