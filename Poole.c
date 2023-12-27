@@ -376,8 +376,6 @@ void* downloadThread(void* args){
         //     printf("%02x ", (unsigned char)message[i]);
         // }
         // printf("\n");
-   
-      
     }
 
 
