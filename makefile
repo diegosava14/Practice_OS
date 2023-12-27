@@ -5,7 +5,7 @@ CFLAGS_THREADS = -Wall -Wextra -pthread
 all: Bowman Poole Discovery
 
 Bowman: Bowman.c common.c common.h
-	$(CC) Bowman.c common.c -o Bowman $(CFLAGS)
+	$(CC) Bowman.c common.c -o Bowman $(CFLAGS_THREADS)
 
 Poole: Poole.c common.c common.h
 	$(CC) Poole.c common.c -o Poole $(CFLAGS_THREADS)

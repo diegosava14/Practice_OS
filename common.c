@@ -102,3 +102,44 @@ void freeFrame(Frame frame) {
         frame.data = NULL;
     }
 }
+
+
+int calculate_md5sum(const char *file_path, char *md5sum) {
+    int pipefd[2];
+    pid_t pid;
+    char buf[33];
+
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        return -1;
+    }
+
+    pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return -1;
+    }
+
+    if (pid == 0) { // Child process
+        close(pipefd[0]); // Close unused read end
+        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe write end
+        close(pipefd[1]); // Close the original write end of the pipe
+
+        execlp("md5sum", "md5sum", file_path, (char *)NULL);
+        perror("execlp"); // execlp() only returns on error
+        exit(EXIT_FAILURE);
+    } else { // Parent process
+        close(pipefd[1]); // Close unused write end
+
+        // Read from pipe, get only the MD5 checksum part
+        if (read(pipefd[0], buf, 32) > 0) {
+            buf[32] = '\0'; // Null-terminate the string
+            strcpy(md5sum, buf);
+        }
+        close(pipefd[0]); // Close read end
+
+        waitpid(pid, NULL, 0); // Wait for child process to finish
+    }
+
+    return 0;
+}

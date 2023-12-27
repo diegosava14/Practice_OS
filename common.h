@@ -50,6 +50,9 @@
 #define HEADER_FILE_NOT_FOUND "FILE_NOT_FOUND"
 #define HEADER_FILE_DATA "FILE_DATA"
 
+#define HEADER_CHECK_OK "CHECK_OK"
+#define HEADER_CHECK_KO "CHECK_KO"
+
 typedef struct{
     uint8_t type;
     uint16_t headerLength;
@@ -66,5 +69,7 @@ Frame frameTranslation(char message[256]);
 Frame receiveMessage(int sockfd);
 
 void freeFrame(Frame frame);
+
+int calculate_md5sum(const char *file_path, char *md5sum);
 
 #endif
