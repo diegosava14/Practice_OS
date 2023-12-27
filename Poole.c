@@ -323,7 +323,6 @@ void listPlaylists(int sockfd){
     num_toSend = 0;
 }
 
-int chunkNumber;
 
 void* downloadThread(void* args){
     DownloadThread *arguments = (DownloadThread *) args;
@@ -344,6 +343,13 @@ void* downloadThread(void* args){
 
     while ((bytesRead = read(fd, dataBuffer, sizeof(dataBuffer))) > 0) {
         uint8_t type = 0x04;
+
+        
+        if (bytesRead == -1){
+            perror("Error reading file");
+            ksigint();
+        }
+
         int headerLength = strlen(HEADER_FILE_DATA); 
 
         message[0] = type;
@@ -354,7 +360,7 @@ void* downloadThread(void* args){
         message[3 + strlen(HEADER_FILE_DATA)] = '\0';
 
         memcpy(&message[3 + strlen(HEADER_FILE_DATA) + 1], &id_net, sizeof(id_net));
-        printf("id_net: %d\n", id_net);
+        // printf("id_net: %d\n", id_net);
         memcpy(&message[3 + strlen(HEADER_FILE_DATA) + 1 + sizeof(id_net)], &ampersand, 1);
         memcpy(&message[3 + strlen(HEADER_FILE_DATA) + 1 + sizeof(id_net) + 1], dataBuffer, bytesRead);
 
@@ -365,18 +371,19 @@ void* downloadThread(void* args){
         }
         write(arguments->sockfd, message, totalLength);
 
-        printf("\nRaw message data: ");
-        for (long unsigned int i = 0; i < totalLength; i++){
-            printf("%02x ", (unsigned char)message[i]);
-        }
-        printf("\n");
-        printf("Chunks sent: %d\n", chunkNumber);
-        chunkNumber++;
+        // printf("\nRaw message data: ");
+        // for (long unsigned int i = 0; i < totalLength; i++){
+        //     printf("%02x ", (unsigned char)message[i]);
+        // }
+        // printf("\n");
     }
-    //printf("Chunks sent: %d\n", chunkNumber);
 
-    if (bytesRead == -1){
-        perror("Error reading file");
+
+    Frame recieveCheck = receiveMessage(arguments->sockfd);
+    if (strcmp(recieveCheck.header, HEADER_CHECK_OK) == 0){
+        write(1, "File sent successfully\n\n", 24);
+    } else {
+        write(1, "Error sending file\n\n", 20);
     }
 
     close(fd);
@@ -385,25 +392,32 @@ void* downloadThread(void* args){
 }
 
 
-
 void startSending(int sockfd, char *song_name){
+
     int id = rand() % 1000;
-    chunkNumber = 0;
 
     char *desired_path;
     asprintf(&desired_path, "%s/songs/%s", poole.folder, song_name);
     int fd = open(desired_path, O_RDONLY);
 
     ssize_t file_size = lseek(fd, 0, SEEK_END);
-    printf("File size: %ld\n", file_size);
+    // printf("File size: %ld\n", file_size);
     char *file_size_str;
     asprintf(&file_size_str, "%ld", file_size);
 
     //md5sum
+    char* md5sum = malloc(33 * sizeof(char));
+    int md5 = calculate_md5sum(desired_path, md5sum);
+    if (md5 == -1){
+        perror("Error calculating md5sum");
+        ksigint();
+    }
+
+    // printf("MD5SUM: %s\n", md5sum);
 
     char *data;
-    asprintf(&data, "%s&%s&%s&%d", song_name, file_size_str, "MD5SUM", id);
-    printf("Data: %s\n", data);
+    asprintf(&data, "%s&%s&%s&%d", song_name, file_size_str, md5sum, id);
+    // printf("Data: %s\n", data);
 
     sendMessage(sockfd, 0x04, strlen(HEADER_NEW_FILE), HEADER_NEW_FILE, data);
         
@@ -423,7 +437,7 @@ void startSending(int sockfd, char *song_name){
     args->file_path[strlen(args->file_path)] = '\0';
     args->id = id;
 
-    printf("Sending first frame: %s\n", args->file_path);
+    // printf("Sending first frame: %s\n", args->file_path);
 
     if (pthread_create(&thread, NULL, downloadThread, args) != 0){
         perror("Error creating download thread");
@@ -486,7 +500,7 @@ void handleFrames(Frame frame, int sockfd){
 
     } else if (strcmp(frame.header, HEADER_DOWNLOAD_SONG) == 0) {
 
-        asprintf(&buffer, "New request - *user* wants to download %s.\n", frame.data);
+        asprintf(&buffer, "New request - *user* wants to download %s.\n", frame.data);  //*user* should be asssigned the bowman name
         write(1, buffer, strlen(buffer));
         free(buffer);
 
@@ -499,6 +513,7 @@ void handleFrames(Frame frame, int sockfd){
             sendMessage(sockfd, 0x04, strlen(HEADER_FILE_NOT_FOUND), HEADER_FILE_NOT_FOUND, buffer);
             free(buffer);
         } else {
+            asprintf(&buffer, "Sending %s to *user*\n", frame.data); //*user* should be asssigned the bowman name
             startSending(sockfd, frame.data);
         }
         
