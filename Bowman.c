@@ -339,7 +339,9 @@ void listPlaylists(){
     }
 }
 
+
 void add_download(DownloadArgs *args) {
+
     pthread_mutex_lock(&download_mutex);
     
     FileDownload *new_download = malloc(sizeof(FileDownload));
@@ -348,7 +350,7 @@ void add_download(DownloadArgs *args) {
         ksigint();
     }
 
-    new_download->file_name = strdup(args->file_name); // Deep copy the file name
+    new_download->file_name = args->file_name;
     new_download->totalFileSize = args->totalFileSize;
     new_download->currentFileSize = 0;
     new_download->active = 1;
@@ -366,7 +368,6 @@ void add_download(DownloadArgs *args) {
 
     pthread_mutex_unlock(&download_mutex);
 }
-
 
 
 void *downloadThread(void *args) {
@@ -527,7 +528,7 @@ void startDownload(){
     char *file_name = info[0];
     int file_size = atoi(info[1]);
     char *MD5SUM = info[2];
-    //int id = atoi(info[3]);
+   // int id = atoi(info[3]);
 
     // printf("File name: %s\n", file_name);
     // printf("File size: %d\n", file_size);
@@ -556,6 +557,12 @@ void startDownload(){
 
     // printf("Desired path: %s\n", desired_path);
 
+    pthread_t thread;
+    DownloadArgs *args = malloc(sizeof(DownloadArgs));
+
+    if (args == NULL) {
+        perror("Memory allocation failed for Download args");
+        free(desired_path);
     pthread_t thread;
     DownloadArgs *args = malloc(sizeof(DownloadArgs));
 
