@@ -499,7 +499,7 @@ void *downloadThread(void *args) {
 }
 
 
-void startDownload(){
+void download(){
 
     freeFrame(frame);
     frame = receiveMessage(pooleSockfd);
@@ -528,7 +528,7 @@ void startDownload(){
     char *file_name = info[0];
     int file_size = atoi(info[1]);
     char *MD5SUM = info[2];
-    //int id = atoi(info[3]);
+   // int id = atoi(info[3]);
 
     // printf("File name: %s\n", file_name);
     // printf("File size: %d\n", file_size);
@@ -557,6 +557,12 @@ void startDownload(){
 
     // printf("Desired path: %s\n", desired_path);
 
+    pthread_t thread;
+    DownloadArgs *args = malloc(sizeof(DownloadArgs));
+
+    if (args == NULL) {
+        perror("Memory allocation failed for Download args");
+        free(desired_path);
     pthread_t thread;
     DownloadArgs *args = malloc(sizeof(DownloadArgs));
 
