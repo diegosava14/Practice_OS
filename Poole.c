@@ -11,7 +11,7 @@ typedef struct{
 
 typedef struct{
     int sockfd;
-    char file_path[256];
+    char *file_path;
     int id;
 } DownloadThread;
 
@@ -433,8 +433,8 @@ void startSending(int sockfd, char *song_name){
     }
 
     args->sockfd = sockfd;
+    args->file_path = malloc(sizeof(char) * (strlen(desired_path) + 1));
     strcpy(args->file_path, desired_path);
-    args->file_path[strlen(args->file_path)] = '\0';
     args->id = id;
 
     // printf("Sending first frame: %s\n", args->file_path);
