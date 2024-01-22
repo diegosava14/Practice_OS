@@ -348,7 +348,7 @@ void add_download(DownloadArgs *args) {
         ksigint();
     }
 
-    new_download->file_name = strdup(args->file_name); // Deep copy the file name
+    new_download->file_name = strdup(args->file_name);
     new_download->totalFileSize = args->totalFileSize;
     new_download->currentFileSize = 0;
     new_download->active = 1;
