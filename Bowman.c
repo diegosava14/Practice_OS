@@ -25,6 +25,7 @@ typedef struct FileDownload{
     pthread_t thread_id;
     char *file_name;
     int totalFileSize;
+    int thread_id;
     int currentFileSize;
     int active;
     struct FileDownload *next;
@@ -339,6 +340,21 @@ void listPlaylists(){
     }
 }
 
+void *frameReceiver(void *args) {
+    while (true) {
+        Frame frame = receiveFrameFromSocket(pooleSockfd);
+
+        int downloadId = extractDownloadId(frame);
+        FileDownload *download = findDownloadById(downloadId);
+
+        if (download != NULL) {
+            // Pass the frame to the appropriate download thread
+            passFrameToDownloadThread(download->thread_id, frame);
+        }
+    }
+}
+
+
 void add_download(DownloadArgs *args) {
     pthread_mutex_lock(&download_mutex);
     
@@ -350,6 +366,7 @@ void add_download(DownloadArgs *args) {
 
     new_download->file_name = strdup(args->file_name);
     new_download->totalFileSize = args->totalFileSize;
+    new_download->thread_id = args->thread_id;
     new_download->currentFileSize = 0;
     new_download->active = 1;
     new_download->next = NULL;
@@ -457,12 +474,9 @@ void *downloadThread(void *args) {
         pthread_mutex_unlock(&download_mutex);
 
 
-
-
         // printf("Bytes received: %d\n", bytesReceived);
         // printf("File size: %d\n", file_size);
 
-        
         freeFrame(frame);
         
     }
@@ -570,6 +584,7 @@ void startDownload(){
     args->file_path = desired_path;
     args->MD5SUM_Poole = MD5SUM;
     args->file_name = file_name;
+    args->thread_id = thread;
 
     add_download(args);
 
@@ -842,6 +857,14 @@ int main(int argc, char *argv[]){
     free(buffer);
 
     pooleToConnect = connectToDiscovery();
+
+     pthread_t frameReceiverThread;
+    if (pthread_create(&frameReceiverThread, NULL, frameReceiver, NULL) != 0) {
+        perror("Failed to create frame receiver thread");
+    }
+
+    pthread_detach(frameReceiverThread);
+
 
     main_menu();
     return 0;
