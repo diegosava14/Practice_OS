@@ -18,16 +18,28 @@ typedef struct {
     int totalFileSize; 
     char *file_path;
     char *MD5SUM_Poole;
+    int song_id;
     char *file_name;
 } DownloadArgs;
+
+typedef struct MessageQueue {
+    Frame *frames;
+    int capacity;
+    int count;
+    int front;
+    int rear;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} MessageQueue;
 
 typedef struct FileDownload{
     pthread_t thread_id;
     char *file_name;
+    int song_id;
     int totalFileSize;
-    int thread_id;
     int currentFileSize;
     int active;
+    MessageQueue queue;
     struct FileDownload *next;
 } FileDownload;
 
@@ -39,6 +51,15 @@ int discoverySockfd, pooleSockfd;
 
 FileDownload *download_head = NULL;
 pthread_mutex_t download_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+MessageQueue *connectQueue;
+MessageQueue *listSongsQueue;
+MessageQueue *listPlaylistsQueue;
+MessageQueue *downloadQueue;
+MessageQueue *checksumQueue;
+MessageQueue *checkDownloadsQueue;
+MessageQueue *clearDownloadsQueue;
+MessageQueue *logoutQueue;
 
 
 void ksigint(){
@@ -57,6 +78,23 @@ void ksigint(){
     freeFrame(frame);
 
     exit(EXIT_SUCCESS);
+}
+
+Frame dequeueFrame(MessageQueue *queue) {
+    pthread_mutex_lock(&queue->mutex);
+
+    if (queue->count == 0) {
+        pthread_cond_wait(&queue->cond, &queue->mutex);
+    }
+
+    Frame frame = queue->frames[queue->front];
+    queue->front = (queue->front + 1) % queue->capacity;
+    queue->count--;
+
+    pthread_cond_signal(&queue->cond);
+    pthread_mutex_unlock(&queue->mutex);
+
+    return frame;
 }
 
 Frame frameTranslation_CON_OK_Discovery(char message[256]){
@@ -199,7 +237,9 @@ void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    //frame = receiveMessage(pooleSockfd);
+    frame = dequeueFrame(logoutQueue);
+
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from poole\n");
         ksigint();
@@ -219,7 +259,9 @@ void listSongs(){
     char *buffer; 
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    //frame = receiveMessage(pooleSockfd);
+    frame = dequeueFrame(listSongsQueue);
+
     if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
         perror("Error receiving songs\n");
         ksigint();
@@ -246,7 +288,8 @@ void listSongs(){
 
     for(int i = 0; i < num_Frames; i++){
         freeFrame(frame);
-        frame = receiveMessage(pooleSockfd);
+        //frame = receiveMessage(pooleSockfd);
+        frame = dequeueFrame(listSongsQueue);
 
         int y = 0;
         char *token = strtok(frame.data, "&");
@@ -269,7 +312,9 @@ void listPlaylists(){
     sendMessage(pooleSockfd, 0x02, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    //frame = receiveMessage(pooleSockfd);
+    frame = dequeueFrame(listPlaylistsQueue);
+
     if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
         perror("Error receiving playlists\n");
         ksigint();
@@ -285,7 +330,9 @@ void listPlaylists(){
 
     for(int i=0; i<num_playlists; i++){
         freeFrame(frame);
-        frame = receiveMessage(pooleSockfd);
+        //frame = receiveMessage(pooleSockfd);
+        frame = dequeueFrame(listPlaylistsQueue);
+
         if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
             ksigint();
@@ -298,7 +345,9 @@ void listPlaylists(){
         sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
 
         freeFrame(frame);
-        frame = receiveMessage(pooleSockfd);
+        //frame = receiveMessage(pooleSockfd);
+        frame = dequeueFrame(listPlaylistsQueue);
+
         if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
             ksigint();
@@ -321,7 +370,8 @@ void listPlaylists(){
 
         for(int i = 0; i < num_Frames; i++){
             freeFrame(frame);
-            frame = receiveMessage(pooleSockfd);
+            //frame = receiveMessage(pooleSockfd);
+            frame = dequeueFrame(listPlaylistsQueue);
 
             int y = 0;
             char *token = strtok(frame.data, "&");
@@ -340,22 +390,50 @@ void listPlaylists(){
     }
 }
 
-void *frameReceiver(void *args) {
-    while (true) {
-        Frame frame = receiveFrameFromSocket(pooleSockfd);
 
-        int downloadId = extractDownloadId(frame);
-        FileDownload *download = findDownloadById(downloadId);
 
-        if (download != NULL) {
-            // Pass the frame to the appropriate download thread
-            passFrameToDownloadThread(download->thread_id, frame);
-        }
+MessageQueue* createMessageQueue(int size) {
+    MessageQueue *queue = malloc(sizeof(MessageQueue));
+    if (queue == NULL) {
+        perror("Memory allocation failed for queue");
+        ksigint();
     }
+
+    queue->frames = malloc(sizeof(Frame) * size);
+    if (queue->frames == NULL) {
+        perror("Memory allocation failed for queue->frames");
+        ksigint();
+    }
+
+    queue->capacity = size;
+    queue->count = 0;
+    queue->front = 0;
+    queue->rear = -1;
+
+    pthread_mutex_init(&queue->mutex, NULL);
+    pthread_cond_init(&queue->cond, NULL);
+
+    return queue;
 }
 
 
+void enqueueFrame(MessageQueue *queue, Frame frame) {
+    pthread_mutex_lock(&queue->mutex);
+
+    if (queue->count == queue->capacity) {
+        pthread_cond_wait(&queue->cond, &queue->mutex);
+    }
+
+    queue->rear = (queue->rear + 1) % queue->capacity;
+    queue->frames[queue->rear] = frame;
+    queue->count++;
+
+    pthread_cond_signal(&queue->cond);
+    pthread_mutex_unlock(&queue->mutex);
+}
+
 void add_download(DownloadArgs *args) {
+    printf("6\n");
     pthread_mutex_lock(&download_mutex);
     
     FileDownload *new_download = malloc(sizeof(FileDownload));
@@ -363,17 +441,19 @@ void add_download(DownloadArgs *args) {
         perror("Memory allocation failed for new download");
         ksigint();
     }
+    printf("7\n");
 
     new_download->file_name = strdup(args->file_name);
     new_download->totalFileSize = args->totalFileSize;
-    new_download->thread_id = args->thread_id;
     new_download->currentFileSize = 0;
     new_download->active = 1;
     new_download->next = NULL;
 
     if (download_head == NULL) {
+        printf("8\n");
         download_head = new_download;
     } else {
+        printf("9\n");
         FileDownload *current = download_head;
         while (current->next != NULL) {
             current = current->next;
@@ -382,14 +462,16 @@ void add_download(DownloadArgs *args) {
     }
 
     pthread_mutex_unlock(&download_mutex);
+    printf("10\n");
 }
 
 
 
 void *downloadThread(void *args) {
 
-    DownloadArgs *downloadArgs = (DownloadArgs *)args;
+    printf("11\n");
 
+    DownloadArgs *downloadArgs = (DownloadArgs *)args;
     FileDownload *current;
 
     int pooleSockfd = downloadArgs->socket_fd;
@@ -404,83 +486,112 @@ void *downloadThread(void *args) {
         }
 
     int bytesReceived = 0;
+    printf("12\n");
 
     while (bytesReceived < file_size) {
-
-        char buffer[256];
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t size = read(pooleSockfd, buffer, 256);
-
-        Frame frame;
-        frame.type = buffer[0];
-    
-        // printf("Size: %ld\n", size);
-
-        // printf("Raw buffer data: ");
-        // for (int i = 0; i < size; ++i) {
-        //     printf("%02x ", (unsigned char)buffer[i]);
-        // }
-        // printf("\n");
-
-        frame.type = buffer[0];
-        //printf("Frame type: %d\n", frame.type);
-        frame.headerLength = (buffer[2] << 8) | buffer[1];
-        //printf("Frame header length: %d\n", frame.headerLength);
-        frame.header = malloc(frame.headerLength);
-        memcpy(frame.header, &buffer[3], frame.headerLength);
-        frame.header[frame.headerLength] = '\0';
-        // printf("Frame header: %s\n", frame.header);
-
-        // printf("calc: %ld\n", size - 3 - frame.headerLength);
-
-        frame.data = malloc(size - 3 - frame.headerLength);
-        if (frame.data == NULL) {
-                perror("Memory allocation failed for frame.data");
-                ksigint();
-        }
-        memcpy(frame.data, &buffer[3 + frame.headerLength + 1], size - 3 - frame.headerLength - 1);
-
-        int chunk_id;
-        memcpy(&chunk_id, frame.data, sizeof(chunk_id));
-        chunk_id = ntohl(chunk_id); 
-        // printf("Chunk id: %d\n", chunk_id);
-
-        size_t data_length = size - 3 - frame.headerLength - sizeof(chunk_id) - 1 - 1;
-            // printf("Data length: %ld\n", data_length);
-
-        // printf("-->Frame data: ");
-        // for (unsigned long int i = 0; i < data_length; ++i) {
-        //     printf("%02x ", (unsigned char)frame.data[i + sizeof(chunk_id) + 1]);
-        // }
-        // printf("\n");
-
-        if ((long unsigned)bytesReceived + data_length > (long unsigned)file_size) {
-            data_length = file_size - bytesReceived;
-        }
-        write(fd, frame.data + sizeof(chunk_id) + 1, data_length);
-
-        bytesReceived += data_length;
-
+        printf("13\n");
 
         pthread_mutex_lock(&download_mutex);
-        FileDownload *current = download_head;
-        while (current != NULL) {
+        current = download_head;
+
+        if (current != NULL) {
+            printf("14\n");
+
             if (strcmp(current->file_name, downloadArgs->file_name) == 0) {
-                current->currentFileSize = bytesReceived;
-                break;
+                printf("15\n");
+
+                if (current->queue.count > 0) {
+                    printf("16\n");
+
+                    frame = dequeueFrame(&current->queue);
+                    pthread_mutex_unlock(&download_mutex);
+
+                    printf("17\n");
+                                
+                    char buffer[256];
+                    memset(buffer, 0, sizeof(buffer));
+                    //ssize_t size = read(pooleSockfd, buffer, 256);
+                    ssize_t size = 256;
+
+                    Frame frame;
+                    frame.type = buffer[0];
+                
+                    // printf("Size: %ld\n", size);
+
+                    // printf("Raw buffer data: ");
+                    // for (int i = 0; i < size; ++i) {
+                    //     printf("%02x ", (unsigned char)buffer[i]);
+                    // }
+                    // printf("\n");
+
+                    frame.type = buffer[0];
+                    //printf("Frame type: %d\n", frame.type);
+                    frame.headerLength = (buffer[2] << 8) | buffer[1];
+                    //printf("Frame header length: %d\n", frame.headerLength);
+                    frame.header = malloc(frame.headerLength);
+                    memcpy(frame.header, &buffer[3], frame.headerLength);
+                    frame.header[frame.headerLength] = '\0';
+                    // printf("Frame header: %s\n", frame.header);
+
+                    // printf("calc: %ld\n", size - 3 - frame.headerLength);
+
+                    frame.data = malloc(size - 3 - frame.headerLength);
+                    if (frame.data == NULL) {
+                            perror("Memory allocation failed for frame.data");
+                            ksigint();
+                    }
+                    memcpy(frame.data, &buffer[3 + frame.headerLength + 1], size - 3 - frame.headerLength - 1);
+
+                    int chunk_id;
+                    memcpy(&chunk_id, frame.data, sizeof(chunk_id));
+                    chunk_id = ntohl(chunk_id); 
+                    // printf("Chunk id: %d\n", chunk_id);
+
+                    size_t data_length = size - 3 - frame.headerLength - sizeof(chunk_id) - 1 - 1;
+                        // printf("Data length: %ld\n", data_length);
+
+                    // printf("-->Frame data: ");
+                    // for (unsigned long int i = 0; i < data_length; ++i) {
+                    //     printf("%02x ", (unsigned char)frame.data[i + sizeof(chunk_id) + 1]);
+                    // }
+                    // printf("\n");
+
+                    if ((long unsigned)bytesReceived + data_length > (long unsigned)file_size) {
+                        data_length = file_size - bytesReceived;
+                    }
+                    write(fd, frame.data + sizeof(chunk_id) + 1, data_length);
+
+                    bytesReceived += data_length;
+
+                    printf("18\n");
+                    pthread_mutex_lock(&download_mutex);
+                    current = download_head;
+                    while (current != NULL) {
+                        if (strcmp(current->file_name, downloadArgs->file_name) == 0) {
+                            current->currentFileSize = bytesReceived;
+                            break;
+                        }
+                        current = current->next;
+                    }
+                    pthread_mutex_unlock(&download_mutex);
+                    printf("19\n");
+
+                    // printf("Bytes received: %d\n", bytesReceived);
+                    // printf("File size: %d\n", file_size);
+                    freeFrame(frame);
+                } else {
+                    pthread_mutex_unlock(&download_mutex);
+                    printf("20\n");
+                }
+                printf("21\n");
             }
+            printf("22\n");
             current = current->next;
-        }
-        pthread_mutex_unlock(&download_mutex);
-
-
-        // printf("Bytes received: %d\n", bytesReceived);
-        // printf("File size: %d\n", file_size);
-
-        freeFrame(frame);
-        
+        } 
+        printf("23\n");
     }
 
+    printf("24\n");
     // MD5 checksum
     char* md5sum = malloc(33);
     int md5sum_result = calculate_md5sum(file_path, md5sum);
@@ -494,6 +605,9 @@ void *downloadThread(void *args) {
             sendMessage(pooleSockfd, 0x05, strlen(HEADER_CHECK_KO), HEADER_CHECK_KO, "");
         }
     }
+    free(md5sum);
+
+    printf("25\n");
 
     pthread_mutex_lock(&download_mutex);
     current = download_head;
@@ -506,6 +620,7 @@ void *downloadThread(void *args) {
     }
     pthread_mutex_unlock(&download_mutex);
 
+    printf("26\n");
     close(fd);
     free(downloadArgs);
     return NULL;
@@ -515,7 +630,10 @@ void *downloadThread(void *args) {
 void startDownload(){
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    //frame = receiveMessage(pooleSockfd);
+    frame = dequeueFrame(downloadQueue);
+
+    printf("1\n");
 
     if (strcmp(frame.header, HEADER_FILE_NOT_FOUND) == 0) {
         write(1,frame.data, strlen(frame.data));
@@ -541,7 +659,7 @@ void startDownload(){
     char *file_name = info[0];
     int file_size = atoi(info[1]);
     char *MD5SUM = info[2];
-    //int id = atoi(info[3]);
+    int id = atoi(info[3]);
 
     // printf("File name: %s\n", file_name);
     // printf("File size: %d\n", file_size);
@@ -569,7 +687,7 @@ void startDownload(){
     asprintf(&desired_path, "%s/%s", directory_path, file_name);
 
     // printf("Desired path: %s\n", desired_path);
-
+    printf("2\n");
     pthread_t thread;
     DownloadArgs *args = malloc(sizeof(DownloadArgs));
 
@@ -584,9 +702,12 @@ void startDownload(){
     args->file_path = desired_path;
     args->MD5SUM_Poole = MD5SUM;
     args->file_name = file_name;
-    args->thread_id = thread;
+    args->song_id = id;
+
+    printf("3\n");
 
     add_download(args);
+    printf("4\n");
 
     if (pthread_create(&thread, NULL, downloadThread, args) != 0) {
         perror("Failed to create download thread");
@@ -595,6 +716,7 @@ void startDownload(){
     }
 
     pthread_detach(thread);
+    printf("5\n");
 
 }
 
@@ -633,6 +755,65 @@ void checkDownloads() {
 }
 
 
+void *frameReciever(void *args) {
+    int sockfd = *(int *)args;
+
+    while (1) {
+        Frame frame = receiveMessage(sockfd);
+
+        switch (frame.type) {
+
+            case 0x01: 
+                enqueueFrame(connectQueue, frame);
+                break; 
+            case 0x02:
+                enqueueFrame(listSongsQueue, frame);
+                break;
+            case 0x03:
+                enqueueFrame(listPlaylistsQueue, frame);
+                break;
+            case 0x04:
+
+                //what was before modifications related to making everything hadled through message queues
+                pthread_mutex_lock(&download_mutex);
+                FileDownload *current = download_head;
+
+                while (current != NULL) {
+                    int i = 0;
+                    char *info[4];
+                    char *token = strtok(frame.data, "&");
+
+                    while (token != NULL) {
+                        info[i] = token;
+                        i++;
+                        token = strtok(NULL, "&");
+                    }
+
+                    int id = atoi(info[3]);
+                    printf("ID: %d\n", id);
+
+                    if (current->song_id == id) {
+                        enqueueFrame(&current->queue, frame);
+                        break;
+                    }
+                    current = current->next;
+                }
+                pthread_mutex_unlock(&download_mutex);
+                break;
+
+
+            case 0x05:
+                enqueueFrame(checksumQueue, frame);
+                break;
+            case 0x06:
+                enqueueFrame(logoutQueue, frame);
+                break;
+            default:
+                perror("Unknown frame type");
+                break;
+        }
+    }
+}
 
 void main_menu(){
     int run = 1; 
@@ -646,7 +827,7 @@ void main_menu(){
         int spaceCount = 0;
         write(1, "\n$ ", 2);
 
-        inputLength = read(STDIN_FILENO, buffer, 200);
+        inputLength = read(STDIN_FILENO, buffer, 256);
         buffer[inputLength - 1] = '\0';
 
         if (inputLength > 0) {
@@ -858,14 +1039,25 @@ int main(int argc, char *argv[]){
 
     pooleToConnect = connectToDiscovery();
 
-     pthread_t frameReceiverThread;
-    if (pthread_create(&frameReceiverThread, NULL, frameReceiver, NULL) != 0) {
-        perror("Failed to create frame receiver thread");
+    connectQueue = createMessageQueue(10);
+    listSongsQueue = createMessageQueue(10);
+    listPlaylistsQueue = createMessageQueue(10);
+    downloadQueue = createMessageQueue(10);
+    checksumQueue = createMessageQueue(10);
+    checkDownloadsQueue = createMessageQueue(10);
+    clearDownloadsQueue = createMessageQueue(10);
+    logoutQueue = createMessageQueue(10);
+
+
+    pthread_t frameRecieverThread;
+    if (pthread_create(&frameRecieverThread, NULL, frameReciever, &pooleSockfd) != 0) {
+        perror("Failed to create frame reciever thread");
+        ksigint();
     }
 
-    pthread_detach(frameReceiverThread);
-
+    pthread_detach(frameRecieverThread);
 
     main_menu();
     return 0;
 }
+

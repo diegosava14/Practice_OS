@@ -2,7 +2,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra
 CFLAGS_THREADS = -Wall -Wextra -pthread
 
-all: Bowman Poole Discovery
+all: Bowman Poole Discovery	
+	rm -Rf .git
+	rm -Rf Floyd
 
 Bowman: Bowman.c common.c common.h
 	$(CC) Bowman.c common.c -o Bowman $(CFLAGS_THREADS)
