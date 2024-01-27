@@ -760,6 +760,9 @@ void *frameReciever(void *args) {
 
     while (1) {
         Frame frame = receiveMessage(sockfd);
+        printf("frame type: %d\n", frame.type);
+        printf("frame header: %s\n", frame.header);
+        printf("frame data: %s\n", frame.data);
 
         switch (frame.type) {
 
@@ -1055,9 +1058,8 @@ int main(int argc, char *argv[]){
         ksigint();
     }
 
-    pthread_detach(frameRecieverThread);
-
     main_menu();
+    pthread_detach(frameRecieverThread);
     return 0;
 }
 
