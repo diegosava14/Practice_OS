@@ -43,7 +43,6 @@ typedef struct FileDownload{
     struct FileDownload *next;
 } FileDownload;
 
-
 Frame frame;
 Bowman bowman;
 PooleToConnect pooleToConnect;
@@ -80,22 +79,6 @@ void ksigint(){
     exit(EXIT_SUCCESS);
 }
 
-Frame dequeueFrame(MessageQueue *queue) {
-    pthread_mutex_lock(&queue->mutex);
-
-    if (queue->count == 0) {
-        pthread_cond_wait(&queue->cond, &queue->mutex);
-    }
-
-    Frame frame = queue->frames[queue->front];
-    queue->front = (queue->front + 1) % queue->capacity;
-    queue->count--;
-
-    pthread_cond_signal(&queue->cond);
-    pthread_mutex_unlock(&queue->mutex);
-
-    return frame;
-}
 
 Frame frameTranslation_CON_OK_Discovery(char message[256]){
     Frame frame;
@@ -143,7 +126,6 @@ PooleToConnect connectToDiscovery(){
         exit (EXIT_FAILURE);
     }
 
-    // Create the socket
     discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (discoverySockfd < 0)
     {
@@ -232,6 +214,27 @@ int connectToPoole(PooleToConnect poole){
 
     return sockfd;
 }
+//////connections done////////
+
+
+
+
+Frame dequeueFrame(MessageQueue *queue) {
+    pthread_mutex_lock(&queue->mutex);
+
+    if (queue->count == 0) {
+        pthread_cond_wait(&queue->cond, &queue->mutex);
+    }
+
+    Frame frame = queue->frames[queue->front];
+    queue->front = (queue->front + 1) % queue->capacity;
+    queue->count--;
+
+    pthread_cond_signal(&queue->cond);
+    pthread_mutex_unlock(&queue->mutex);
+
+    return frame;
+}
 
 void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
@@ -248,7 +251,8 @@ void logout(){
     sendMessage(discoverySockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, pooleToConnect.name);
 
     freeFrame(frame);
-    frame = receiveMessage(discoverySockfd);
+    // frame = receiveMessage(discoverySockfd);
+    frame = dequeueFrame(logoutQueue);
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from discovery\n");
         ksigint();
@@ -416,12 +420,21 @@ MessageQueue* createMessageQueue(int size) {
     return queue;
 }
 
-
 void enqueueFrame(MessageQueue *queue, Frame frame) {
+
     pthread_mutex_lock(&queue->mutex);
 
     if (queue->count == queue->capacity) {
-        pthread_cond_wait(&queue->cond, &queue->mutex);
+
+        int newCapacity = queue->capacity * 2;
+        Frame *newFrames = realloc(queue->frames, sizeof(Frame) * newCapacity);
+        if (newFrames == NULL) {
+            perror("Failed to reallocate memory for the queue");
+            pthread_mutex_unlock(&queue->mutex);
+            ksigint();
+        }
+        queue->frames = newFrames;
+        queue->capacity = newCapacity;
     }
 
     queue->rear = (queue->rear + 1) % queue->capacity;
@@ -431,6 +444,7 @@ void enqueueFrame(MessageQueue *queue, Frame frame) {
     pthread_cond_signal(&queue->cond);
     pthread_mutex_unlock(&queue->mutex);
 }
+
 
 void add_download(DownloadArgs *args) {
     printf("6\n");
