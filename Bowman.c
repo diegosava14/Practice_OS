@@ -43,6 +43,8 @@ pthread_mutex_t download_mutex = PTHREAD_MUTEX_INITIALIZER;
 void ksigint(){
     write(1, "\n", 1);
 
+    free(download_head);
+
     free(bowman.name);
     free(bowman.folder);
     free(bowman.ip);
@@ -252,6 +254,7 @@ int connectToPoole(PooleToConnect poole){
 
 /// Download functionalities ///
 void add_download(DownloadArgs *args) {
+
     pthread_mutex_lock(&download_mutex);
     
     FileDownload *new_download = malloc(sizeof(FileDownload));
@@ -340,8 +343,8 @@ void *downloadThread(void *args) {
         memset(buffer, 0, sizeof(buffer));
         ssize_t size = read(pooleSockfd, buffer, 256);
 
-        Frame frame;
-        frame.type = buffer[0];
+        Frame frame_download;
+        frame_download.type = buffer[0];
     
         // printf("Size: %ld\n", size);
 
@@ -351,30 +354,30 @@ void *downloadThread(void *args) {
         // }
         // printf("\n");
 
-        frame.type = buffer[0];
+        frame_download.type = buffer[0];
         //printf("Frame type: %d\n", frame.type);
-        frame.headerLength = (buffer[2] << 8) | buffer[1];
+        frame_download.headerLength = (buffer[2] << 8) | buffer[1];
         //printf("Frame header length: %d\n", frame.headerLength);
-        frame.header = malloc(frame.headerLength);
-        memcpy(frame.header, &buffer[3], frame.headerLength);
-        frame.header[frame.headerLength] = '\0';
+        frame_download.header = malloc(frame_download.headerLength);
+        memcpy(frame_download.header, &buffer[3], frame_download.headerLength);
+        frame_download.header[frame_download.headerLength] = '\0';
         // printf("Frame header: %s\n", frame.header);
 
         // printf("calc: %ld\n", size - 3 - frame.headerLength);
 
-        frame.data = malloc(size - 3 - frame.headerLength);
-        if (frame.data == NULL) {
-                perror("Memory allocation failed for frame.data");
+        frame_download.data = malloc(size - 3 - frame_download.headerLength);
+        if (frame_download.data == NULL) {
+                perror("Memory allocation failed for frame_download.data");
                 ksigint();
         }
-        memcpy(frame.data, &buffer[3 + frame.headerLength + 1], size - 3 - frame.headerLength - 1);
+        memcpy(frame_download.data, &buffer[3 + frame_download.headerLength + 1], size - 3 - frame_download.headerLength - 1);
 
         int chunk_id;
-        memcpy(&chunk_id, frame.data, sizeof(chunk_id));
+        memcpy(&chunk_id, frame_download.data, sizeof(chunk_id));
         chunk_id = ntohl(chunk_id); 
         // printf("Chunk id: %d\n", chunk_id);
 
-        size_t data_length = size - 3 - frame.headerLength - sizeof(chunk_id) - 1 - 1;
+        size_t data_length = size - 3 - frame_download.headerLength - sizeof(chunk_id) - 1 - 1;
             // printf("Data length: %ld\n", data_length);
 
         // printf("-->Frame data: ");
@@ -386,7 +389,7 @@ void *downloadThread(void *args) {
         if ((long unsigned)bytesReceived + data_length > (long unsigned)file_size) {
             data_length = file_size - bytesReceived;
         }
-        write(fd, frame.data + sizeof(chunk_id) + 1, data_length);
+        write(fd, frame_download.data + sizeof(chunk_id) + 1, data_length);
 
         bytesReceived += data_length;
 
@@ -405,7 +408,7 @@ void *downloadThread(void *args) {
         // printf("Bytes received: %d\n", bytesReceived);
         // printf("File size: %d\n", file_size);
         
-        freeFrame(frame);
+        freeFrame(frame_download);
         
     }
 
@@ -435,7 +438,10 @@ void *downloadThread(void *args) {
     pthread_mutex_unlock(&download_mutex);
 
     close(fd);
+
+    free(md5sum);
     free(downloadArgs);
+
     return NULL;
 }
 
@@ -446,7 +452,7 @@ void startDownload(){
     frame = receiveMessage(pooleSockfd);
 
     if (strcmp(frame.header, HEADER_FILE_NOT_FOUND) == 0) {
-        write(1,frame.data, strlen(frame.data));
+        write(1, frame.data, strlen(frame.data));
         return;
     }
 
@@ -516,7 +522,7 @@ void startDownload(){
     add_download(args);
 
     write(1, "Download started!\n", 18);
-    
+
     if (pthread_create(&thread, NULL, downloadThread, args) != 0) {
         perror("Failed to create download thread");
         free(args);
