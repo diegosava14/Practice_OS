@@ -24,6 +24,7 @@ int *clients;
 int num_clients = 0;
 
 void ksigint(){
+    
     FD_ZERO(&rfds);
 
     close(pooleSockfd);
@@ -52,6 +53,7 @@ void ksigint(){
 }
 
 int initPooleSocket(){
+
     printf("Port: %d\n", discovery.portPoole);
 
     uint16_t port;
@@ -85,6 +87,7 @@ int initPooleSocket(){
 }
 
 int initBowmanSocket(){
+
     printf("Port: %d\n", discovery.portBowman);
 
     uint16_t port;
@@ -118,6 +121,7 @@ int initBowmanSocket(){
 }
 
 void discoveryMenu(int sockfd){
+
     freeFrame(frame);
     frame = receiveMessage(sockfd);
 
@@ -236,22 +240,11 @@ void discoveryServer() {
     }
 }
 
-int main(int argc, char *argv[]){
-    char *buffer;
+void readDiscoveryFile(char *filename){
+
     char *line;
-
-    signal(SIGINT, ksigint);
-
-    if (argc != 2) {
-        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
-        write(1, buffer, strlen(buffer));
-        free(buffer);
-        return -1;
-    }
-
-    //READING DISCOVERY FILE
-
-    int fd_discovery = open(argv[1], O_RDONLY);
+    
+    int fd_discovery = open(filename, O_RDONLY);
 
     if(fd_discovery == -1){
         perror("Error opening poole file");
@@ -279,6 +272,21 @@ int main(int argc, char *argv[]){
     free(line);
 
     close(fd_discovery);
+}
+
+int main(int argc, char *argv[]){
+    char *buffer;
+
+    signal(SIGINT, ksigint);
+
+    if (argc != 2) {
+        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+        return -1;
+    }
+    
+    readDiscoveryFile(argv[1]);
 
     discoveryServer();
 

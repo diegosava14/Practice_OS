@@ -50,82 +50,7 @@ void ksigint(){
     exit(0);
 }
 
-void connectToDiscovery(){
-    uint16_t port;
-    int aux = poole.portDiscovery;
-    if (aux < 1 || aux > 65535)
-    {
-        perror ("port");
-        exit (EXIT_FAILURE);
-    }
-    port = aux;
-
-    struct in_addr ip_addr;
-    if (inet_aton (poole.ipDiscovery, &ip_addr) == 0)
-    {
-        perror ("inet_aton");
-        exit (EXIT_FAILURE);
-    }
-
-    // Create the socket
-    discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (discoverySockfd < 0)
-    {
-        perror ("socket TCP");
-        exit (EXIT_FAILURE);
-    }
-
-    struct sockaddr_in s_addr;
-    bzero (&s_addr, sizeof (s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons (port);
-    s_addr.sin_addr = ip_addr;
-
-    // We can connect to the server casting the struct:
-    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
-    if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
-    {
-        perror ("connect");
-        exit (EXIT_FAILURE);
-    }
- 
-    char *data;
-    asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
-    sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
-    free(data);
-
-    freeFrame(frame);
-    frame = receiveMessage(discoverySockfd);
-    
-    if(strcmp(frame.header, HEADER_CON_OK) != 0){
-        perror("Connection refused");
-        ksigint();
-    }
-}
-
-void removeClient(int sockfd) {
-    int index = -1;
-
-    for (int i = 0; i < num_clients; i++) {
-        if (clients[i] == sockfd) {
-            index = i;
-            break;
-        }
-    }
-
-    if (index != -1) {
-        for (int i = index; i < num_clients - 1; i++) {
-            clients[i] = clients[i + 1];
-        }
-
-        num_clients--;
-
-        clients = realloc(clients, sizeof(int) * num_clients);
-    }
-
-    FD_CLR(sockfd, &rfds);
-}
-
+///Quick functionalities start///
 void listSongs(char *desired_path, int sockfd){
     char *buffer;
     DIR *dir;
@@ -324,6 +249,31 @@ void listPlaylists(int sockfd){
 }
 
 
+void removeClient(int sockfd) {
+    int index = -1;
+
+    for (int i = 0; i < num_clients; i++) {
+        if (clients[i] == sockfd) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index != -1) {
+        for (int i = index; i < num_clients - 1; i++) {
+            clients[i] = clients[i + 1];
+        }
+
+        num_clients--;
+        clients = realloc(clients, sizeof(int) * num_clients);
+    }
+    FD_CLR(sockfd, &rfds);
+}
+
+///Quick functionalities end///
+
+
+/// File sending functionalities///
 void* downloadThread(void* args){
     DownloadThread *arguments = (DownloadThread *) args;
     char *file_path = arguments->file_path;
@@ -335,6 +285,7 @@ void* downloadThread(void* args){
         ksigint();
     }
 
+    ///File reading and message sending///
     ssize_t bytesRead;
     int id_net = htonl(id);
     char ampersand = '&';
@@ -343,7 +294,6 @@ void* downloadThread(void* args){
 
     while ((bytesRead = read(fd, dataBuffer, sizeof(dataBuffer))) > 0) {
         uint8_t type = 0x04;
-
         
         if (bytesRead == -1){
             perror("Error reading file");
@@ -378,13 +328,19 @@ void* downloadThread(void* args){
         // printf("\n");
     }
 
+   ///File reading and message sending///
 
-    Frame recieveCheck = receiveMessage(arguments->sockfd);
+    Frame recieveCheck = receiveMessage(arguments->sockfd);  // (ERRASE LATER) gets confiramtion that the file is recieved well
+    char b[256];
+    strcpy(b, arguments->file_path);
     if (strcmp(recieveCheck.header, HEADER_CHECK_OK) == 0){
-        write(1, "File sent successfully\n\n", 24);
+        write(1, "File sent successfully\n", 24);
+        write(1, b, strlen(b));
     } else {
-        write(1, "Error sending file\n\n", 20);
+        write(1, "Error sending file\n", 20);
+        write(1, b, strlen(b));
     }
+    write(1, "\n\n", 2);  //Errase later end
 
     close(fd);
     free(arguments);
@@ -423,6 +379,8 @@ void startSending(int sockfd, char *song_name){
         
     free(file_size_str);
     free(data);
+    free(md5sum);
+
     pthread_t thread;
 
     DownloadThread *args = malloc(sizeof(DownloadThread));
@@ -448,7 +406,7 @@ void startSending(int sockfd, char *song_name){
     pthread_detach(thread);
 
 }
-
+/// File sending functionalities end///
 
 bool fileCheck(char *song){
     char *desired_path;
@@ -520,9 +478,9 @@ void handleFrames(Frame frame, int sockfd){
     }
 }
 
+
+/// Poole setup///
 void pooleServer(){
-    //char *buffer;
-    //fd_set rfds;
 
     uint16_t port;
     int aux = poole.portPoole;
@@ -552,7 +510,6 @@ void pooleServer(){
         exit (EXIT_FAILURE);
     }
 
-    // We now open the port (5 backlog queue, typical value)
     listen (serverSockfd, 5);
 
     FD_ZERO(&rfds);
@@ -591,23 +548,64 @@ void pooleServer(){
 }
 
 
+void connectToDiscovery(){
+    uint16_t port;
+    int aux = poole.portDiscovery;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
 
-int main(int argc, char *argv[]){
-    char *buffer;
-    char *line;
-
-    signal(SIGINT, ksigint);
-
-    if (argc != 2) {
-        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
-        write(1, buffer, strlen(buffer));
-        free(buffer);
-        return -1;
+    struct in_addr ip_addr;
+    if (inet_aton (poole.ipDiscovery, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
     }
 
-    //READING POOLE FILE
+    // Create the socket
+    discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (discoverySockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
 
-    int fd_poole = open(argv[1], O_RDONLY);
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
+
+    // We can connect to the server casting the struct:
+    // connect waits for a struct sockaddr* and we are passing a struct sockaddr_in*
+    if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
+ 
+    char *data;
+    asprintf(&data, "%s&%s&%d", poole.nameServer, poole.ipPoole, poole.portPoole);
+    sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_POOLE), HEADER_NEW_POOLE, data);
+    free(data);
+
+    freeFrame(frame);
+    frame = receiveMessage(discoverySockfd);
+    
+    if(strcmp(frame.header, HEADER_CON_OK) != 0){
+        perror("Connection refused");
+        ksigint();
+    }
+}
+
+void readPooleFile(char *file){
+    char *buffer;
+    char *line;
+    
+    int fd_poole = open(file, O_RDONLY);
 
     if(fd_poole == -1){
         perror("Error opening poole file");
@@ -651,9 +649,26 @@ int main(int argc, char *argv[]){
     free(line);
 
     close(fd_poole);
+}
+/// Poole setup end///
+
+
+int main(int argc, char *argv[]){
+    char *buffer;
+
+    signal(SIGINT, ksigint);
+
+    if (argc != 2) {
+        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+        return -1;
+    }
+
+    //READING POOLE FILE
+    readPooleFile(argv[1]);
 
     //SOCKETS
-
     asprintf(&buffer, "Connecting to %s to the system...\n", poole.nameServer);
     write(1, buffer, strlen(buffer));
     free(buffer);

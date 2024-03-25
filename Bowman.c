@@ -58,142 +58,7 @@ void ksigint(){
     exit(EXIT_SUCCESS);
 }
 
-Frame frameTranslation_CON_OK_Discovery(char message[256]){
-    Frame frame;
-
-    frame.type = message[0];
-
-    frame.headerLength = (message[2] << 8) | message[1];
-
-    frame.header = malloc(frame.headerLength + 1);
-    strncpy(frame.header, &message[3], frame.headerLength);
-    frame.header[frame.headerLength] = '\0';
-
-    frame.data = strdup(&message[3 + frame.headerLength]);
-
-    return frame;
-}
-
-Frame receiveMessage_CON_OK_Discovery(int sockfd){
-    char message[256];
-    int size = read(sockfd, message, 256);
-    if(size == 0){
-        Frame frame;
-        frame.type = 0;
-        return frame;
-    }
-    return frameTranslation_CON_OK_Discovery(message);
-}
-
-PooleToConnect connectToDiscovery(){
-    PooleToConnect pooleToConnect;
-
-    uint16_t port;
-    int aux = bowman.port;
-    if (aux < 1 || aux > 65535)
-    {
-        perror ("port");
-        exit (EXIT_FAILURE);
-    }
-    port = aux;
-
-    struct in_addr ip_addr;
-    if (inet_aton (bowman.ip, &ip_addr) == 0)
-    {
-        perror ("inet_aton");
-        exit (EXIT_FAILURE);
-    }
-
-    // Create the socket
-    discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (discoverySockfd < 0)
-    {
-        perror ("socket TCP");
-        exit (EXIT_FAILURE);
-    }
-
-    struct sockaddr_in s_addr;
-    bzero (&s_addr, sizeof (s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons (port);
-    s_addr.sin_addr = ip_addr;
-
-    if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
-    {
-        perror ("connect");
-        exit (EXIT_FAILURE);
-    }
- 
-    char *data;
-    asprintf(&data, "%s", bowman.name);
-    sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
-    free(data);
-
-    freeFrame(frame);
-    frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
-    if(strcmp(frame.header, HEADER_CON_OK) != 0){
-        perror("Connection refused");
-        ksigint();
-    }
-
-    int i = 0;
-    char *info[3];
-    char *token = strtok(frame.data, "&");
-
-    while (token != NULL) {
-        info[i] = token;
-        i++;
-        token = strtok(NULL, "&");
-    }
-
-    pooleToConnect.name = strdup(info[0]);
-    pooleToConnect.ip = strdup(info[1]);
-    pooleToConnect.port = atoi(info[2]);
-
-    return pooleToConnect;
-}
-
-int connectToPoole(PooleToConnect poole){
-    uint16_t port;
-    int aux = poole.port;
-    if (aux < 1 || aux > 65535)
-    {
-        perror ("port");
-        exit (EXIT_FAILURE);
-    }
-    port = aux;
-
-    struct in_addr ip_addr;
-    if (inet_aton (poole.ip, &ip_addr) == 0)
-    {
-        perror ("inet_aton");
-        exit (EXIT_FAILURE);
-    }
-
-
-    int sockfd;
-    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sockfd < 0)
-    {
-        perror ("socket TCP");
-        exit (EXIT_FAILURE);
-    }
-
-    struct sockaddr_in s_addr;
-    bzero (&s_addr, sizeof (s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons (port);
-    s_addr.sin_addr = ip_addr;
-
-    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
-    {
-        perror ("connect");
-        exit (EXIT_FAILURE);
-    }
-
-    return sockfd;
-}
-
+/// Quick functionalities ///
 void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
 
@@ -339,6 +204,53 @@ void listPlaylists(){
     }
 }
 
+
+int connectToPoole(PooleToConnect poole){
+    uint16_t port;
+    int aux = poole.port;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
+
+    struct in_addr ip_addr;
+    if (inet_aton (poole.ip, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
+    }
+
+
+    int sockfd;
+    sockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
+
+    if (connect (sockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
+
+    return sockfd;
+}
+
+/// Quick functionalities end///
+
+
+
+/// Download functionalities ///
 void add_download(DownloadArgs *args) {
     pthread_mutex_lock(&download_mutex);
     
@@ -348,7 +260,7 @@ void add_download(DownloadArgs *args) {
         ksigint();
     }
 
-    new_download->file_name = strdup(args->file_name); // Deep copy the file name
+    new_download->file_name = strdup(args->file_name);
     new_download->totalFileSize = args->totalFileSize;
     new_download->currentFileSize = 0;
     new_download->active = 1;
@@ -362,6 +274,40 @@ void add_download(DownloadArgs *args) {
             current = current->next;
         }
         current->next = new_download;
+    }
+
+    pthread_mutex_unlock(&download_mutex);
+}
+
+
+void checkDownloads() {
+    pthread_mutex_lock(&download_mutex);
+
+    FileDownload *current = download_head;
+
+    if (current == NULL) {
+        write(1, "No downloads to show.\n", 22);
+    } else {
+        while (current != NULL) {
+            char *status = current->active ? "Downloading" : "Complete";
+            int percentage = current->totalFileSize > 0 ? (100 * current->currentFileSize) / current->totalFileSize : 0;
+            char progressBar[51];
+            int i;
+            for (i = 0; i < percentage / 2; i++) {
+                progressBar[i] = '=';
+            }
+            progressBar[i] = '\0';
+            
+            char *buffer;
+            asprintf(&buffer, "%s\n", current->file_name);
+            write(1, buffer, strlen(buffer));
+            free(buffer);
+            asprintf(&buffer, "[%s] %d%% (%s)\n", progressBar, percentage, status);
+            write(1, buffer, strlen(buffer));
+            free(buffer);
+
+            current = current->next;
+        }
     }
 
     pthread_mutex_unlock(&download_mutex);
@@ -456,12 +402,8 @@ void *downloadThread(void *args) {
         }
         pthread_mutex_unlock(&download_mutex);
 
-
-
-
         // printf("Bytes received: %d\n", bytesReceived);
         // printf("File size: %d\n", file_size);
-
         
         freeFrame(frame);
         
@@ -573,6 +515,8 @@ void startDownload(){
 
     add_download(args);
 
+    write(1, "Download started!\n", 18);
+    
     if (pthread_create(&thread, NULL, downloadThread, args) != 0) {
         perror("Failed to create download thread");
         free(args);
@@ -582,40 +526,8 @@ void startDownload(){
     pthread_detach(thread);
 
 }
+/// Download functionalities end ///
 
-
-void checkDownloads() {
-    pthread_mutex_lock(&download_mutex);
-
-    FileDownload *current = download_head;
-
-    if (current == NULL) {
-        write(1, "No downloads to show.\n", 22);
-    } else {
-        while (current != NULL) {
-            char *status = current->active ? "Downloading" : "Complete";
-            int percentage = current->totalFileSize > 0 ? (100 * current->currentFileSize) / current->totalFileSize : 0;
-            char progressBar[51];
-            int i;
-            for (i = 0; i < percentage / 2; i++) {
-                progressBar[i] = '=';
-            }
-            progressBar[i] = '\0';
-            
-            char *buffer;
-            asprintf(&buffer, "%s\n", current->file_name);
-            write(1, buffer, strlen(buffer));
-            free(buffer);
-            asprintf(&buffer, "[%s] %d%% (%s)\n", progressBar, percentage, status);
-            write(1, buffer, strlen(buffer));
-            free(buffer);
-
-            current = current->next;
-        }
-    }
-
-    pthread_mutex_unlock(&download_mutex);
-}
 
 
 
@@ -728,22 +640,15 @@ void main_menu(){
 
         else if((strcasecmp(input[0], OPT_DOWNLOAD) == 0)){
             if(connected){
-
-                write(1, "Download started!\n", 18);
-
                 if (strstr(input[1], ".mp3") != NULL) {
-                  
                     sendMessage(pooleSockfd, 0x03, strlen(HEADER_DOWNLOAD_SONG), HEADER_DOWNLOAD_SONG, input[1]);
-
                     startDownload();
                 } else {
                     // download playlist
                     // sendMessage(pooleSockfd, 0x03, strlen(HEADER_DOWNLOAD_PLAYLIST), HEADER_DOWNLOAD_PLAYLIST, input[1]);
                     // printf("Downloading %s playlist\n", input[1]);
-
                 }
-
-                
+            
             }else{
                 asprintf(&printBuffer, "Cannot Download, you are not connected to HAL 9000\n");
                 write(1, printBuffer, strlen(printBuffer));
@@ -781,21 +686,109 @@ void main_menu(){
     }
 }
 
-int main(int argc, char *argv[]){
-    char *buffer;
-    char *line;
-    int numAmpersand = 0;
 
-    signal(SIGINT, ksigint);
+/// Bowman setup ///
+Frame frameTranslation_CON_OK_Discovery(char message[256]){
+    Frame frame;
 
-    if (argc != 2) {
-        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
-        write(1, buffer, strlen(buffer));
-        free(buffer);
-        return -1;
+    frame.type = message[0];
+
+    frame.headerLength = (message[2] << 8) | message[1];
+
+    frame.header = malloc(frame.headerLength + 1);
+    strncpy(frame.header, &message[3], frame.headerLength);
+    frame.header[frame.headerLength] = '\0';
+
+    frame.data = strdup(&message[3 + frame.headerLength]);
+
+    return frame;
+}
+
+Frame receiveMessage_CON_OK_Discovery(int sockfd){
+    char message[256];
+    int size = read(sockfd, message, 256);
+    if(size == 0){
+        Frame frame;
+        frame.type = 0;
+        return frame;
+    }
+    return frameTranslation_CON_OK_Discovery(message);
+}
+
+PooleToConnect connectToDiscovery(){
+    PooleToConnect pooleToConnect;
+
+    uint16_t port;
+    int aux = bowman.port;
+    if (aux < 1 || aux > 65535)
+    {
+        perror ("port");
+        exit (EXIT_FAILURE);
+    }
+    port = aux;
+
+    struct in_addr ip_addr;
+    if (inet_aton (bowman.ip, &ip_addr) == 0)
+    {
+        perror ("inet_aton");
+        exit (EXIT_FAILURE);
     }
 
-    int fd_bowman = open(argv[1], O_RDONLY);
+    // Create the socket
+    discoverySockfd = socket (AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (discoverySockfd < 0)
+    {
+        perror ("socket TCP");
+        exit (EXIT_FAILURE);
+    }
+
+    struct sockaddr_in s_addr;
+    bzero (&s_addr, sizeof (s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons (port);
+    s_addr.sin_addr = ip_addr;
+
+    if (connect (discoverySockfd, (void *) &s_addr, sizeof (s_addr)) < 0)
+    {
+        perror ("connect");
+        exit (EXIT_FAILURE);
+    }
+ 
+    char *data;
+    asprintf(&data, "%s", bowman.name);
+    sendMessage(discoverySockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, data);
+    free(data);
+
+    freeFrame(frame);
+    frame = receiveMessage_CON_OK_Discovery(discoverySockfd);
+    if(strcmp(frame.header, HEADER_CON_OK) != 0){
+        perror("Connection refused");
+        ksigint();
+    }
+
+    int i = 0;
+    char *info[3];
+    char *token = strtok(frame.data, "&");
+
+    while (token != NULL) {
+        info[i] = token;
+        i++;
+        token = strtok(NULL, "&");
+    }
+
+    pooleToConnect.name = strdup(info[0]);
+    pooleToConnect.ip = strdup(info[1]);
+    pooleToConnect.port = atoi(info[2]);
+
+    return pooleToConnect;
+}
+
+void readBowmanFile(char *filename){
+    char *line;
+    char *buffer;
+    int numAmpersand = 0;
+
+    int fd_bowman = open(filename, O_RDONLY);
 
     if(fd_bowman == -1){
         perror("Error opening bowman file");
@@ -840,6 +833,23 @@ int main(int argc, char *argv[]){
     asprintf(&buffer, "\n%s user initialized.\n", bowman.name);
     write(1, buffer, strlen(buffer));
     free(buffer);
+
+}
+/// Bowman setup end ///
+
+int main(int argc, char *argv[]){
+    char *buffer;
+
+    signal(SIGINT, ksigint);
+
+    if (argc != 2) {
+        asprintf(&buffer, "ERROR: Expecting one parameter.\n");
+        write(1, buffer, strlen(buffer));
+        free(buffer);
+        return -1;
+    }
+
+    readBowmanFile(argv[1]);
 
     pooleToConnect = connectToDiscovery();
 
