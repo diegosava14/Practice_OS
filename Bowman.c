@@ -50,7 +50,10 @@ int discoverySockfd, pooleSockfd;
 FileDownload *download_head = NULL;
 pthread_mutex_t download_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-MessageQueue mq;
+MessageQueue mqDownloads;
+MessageQueue mqLogout;
+MessageQueue mqListSongs;
+MessageQueue mqListPlaylists;
 
 Frame dequeue(MessageQueue *queue){
 
@@ -79,13 +82,34 @@ void ksigint(){
 
     free(download_head);
 
-    while (mq.front != NULL) {
-        Frame frame = dequeue(&mq);
+    while (mqDownloads.front != NULL) {
+        Frame frame = dequeue(&mqDownloads);
         freeFrame(frame); 
     }
+    pthread_mutex_destroy(&mqDownloads.mutex);
+    pthread_cond_destroy(&mqDownloads.cond);
 
-    pthread_mutex_destroy(&mq.mutex);
-    pthread_cond_destroy(&mq.cond);
+    while (mqLogout.front != NULL) {
+        Frame frame = dequeue(&mqLogout);
+        freeFrame(frame); 
+    }
+    pthread_mutex_destroy(&mqLogout.mutex);
+    pthread_cond_destroy(&mqLogout.cond);
+
+    while (mqListSongs.front != NULL) {
+        Frame frame = dequeue(&mqListSongs);
+        freeFrame(frame); 
+    }
+    pthread_mutex_destroy(&mqListSongs.mutex);
+    pthread_cond_destroy(&mqListSongs.cond);
+
+    while (mqListPlaylists.front != NULL) {
+        Frame frame = dequeue(&mqListPlaylists);
+        freeFrame(frame); 
+    }
+    pthread_mutex_destroy(&mqListPlaylists.mutex);
+    pthread_cond_destroy(&mqListPlaylists.cond);
+
 
     free(bowman.name);
     free(bowman.folder);
@@ -107,7 +131,7 @@ void logout(){
     sendMessage(pooleSockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, bowman.name);
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    frame = dequeue(&mqLogout);
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from poole\n");
         ksigint();
@@ -116,7 +140,7 @@ void logout(){
     sendMessage(discoverySockfd, 0x06, strlen(HEADER_EXIT), HEADER_EXIT, pooleToConnect.name);
 
     freeFrame(frame);
-    frame = receiveMessage(discoverySockfd);
+    frame = dequeue(&mqLogout);
     if (strcmp(frame.header, HEADER_OK_DISCONNECT) != 0){
         perror("Error disconnecting from discovery\n");
         ksigint();
@@ -127,7 +151,7 @@ void listSongs(){
     char *buffer; 
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    frame = dequeue(&mqListSongs);
     if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
         perror("Error receiving songs\n");
         ksigint();
@@ -154,7 +178,7 @@ void listSongs(){
 
     for(int i = 0; i < num_Frames; i++){
         freeFrame(frame);
-        frame = receiveMessage(pooleSockfd);
+        frame = dequeue(&mqListSongs);
 
         int y = 0;
         char *token = strtok(frame.data, "&");
@@ -177,7 +201,7 @@ void listPlaylists(){
     sendMessage(pooleSockfd, 0x02, strlen(HEADER_LIST_PLAYLISTS), HEADER_LIST_PLAYLISTS, bowman.name);
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    frame = dequeue(&mqListPlaylists);  
     if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
         perror("Error receiving playlists\n");
         ksigint();
@@ -193,7 +217,7 @@ void listPlaylists(){
 
     for(int i=0; i<num_playlists; i++){
         freeFrame(frame);
-        frame = receiveMessage(pooleSockfd);
+        frame = dequeue(&mqListPlaylists);
         if(strcasecmp(frame.header, HEADER_PLAYLISTS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
             ksigint();
@@ -206,7 +230,7 @@ void listPlaylists(){
         sendMessage(pooleSockfd, 0x02, strlen(HEADER_ACK), HEADER_ACK, "");
 
         freeFrame(frame);
-        frame = receiveMessage(pooleSockfd);
+        frame = dequeue(&mqListPlaylists);
         if(strcasecmp(frame.header, HEADER_SONGS_RESPONSE) != 0){
             perror("Error receiving playlists\n");
             ksigint();
@@ -229,7 +253,7 @@ void listPlaylists(){
 
         for(int i = 0; i < num_Frames; i++){
             freeFrame(frame);
-            frame = receiveMessage(pooleSockfd);
+            frame = dequeue(&mqListPlaylists);
 
             int y = 0;
             char *token = strtok(frame.data, "&");
@@ -381,46 +405,49 @@ void *downloadThread(void *args) {
 
     while (bytesReceived < file_size) {
 
-        char buffer[256];
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t size = read(pooleSockfd, buffer, 256);
+        // char buffer[256];
+        // memset(buffer, 0, sizeof(buffer));
+        // ssize_t size = read(pooleSockfd, buffer, 256);
+        
 
-        Frame frame_download;
-        frame_download.type = buffer[0];
+        // Frame frame_download;
+        // frame_download.type = buffer[0];
     
-        // printf("Size: %ld\n", size);
+        // // printf("Size: %ld\n", size);
 
-        // printf("Raw buffer data: ");
-        // for (int i = 0; i < size; ++i) {
-        //     printf("%02x ", (unsigned char)buffer[i]);
-        // }
-        // printf("\n");
+        // // printf("Raw buffer data: ");
+        // // for (int i = 0; i < size; ++i) {
+        // //     printf("%02x ", (unsigned char)buffer[i]);
+        // // }
+        // // printf("\n");
 
-        frame_download.type = buffer[0];
-        //printf("Frame type: %d\n", frame.type);
-        frame_download.headerLength = (buffer[2] << 8) | buffer[1];
-        //printf("Frame header length: %d\n", frame.headerLength);
-        frame_download.header = malloc(frame_download.headerLength);
-        memcpy(frame_download.header, &buffer[3], frame_download.headerLength);
-        frame_download.header[frame_download.headerLength] = '\0';
+        // frame_download.type = buffer[0];
+        // //printf("Frame type: %d\n", frame.type);
+        // frame_download.headerLength = (buffer[2] << 8) | buffer[1];
+        // //printf("Frame header length: %d\n", frame.headerLength);
+        // frame_download.header = malloc(frame_download.headerLength);
+        // memcpy(frame_download.header, &buffer[3], frame_download.headerLength);
+        // frame_download.header[frame_download.headerLength] = '\0';
         // printf("Frame header: %s\n", frame.header);
 
         // printf("calc: %ld\n", size - 3 - frame.headerLength);
 
-        frame_download.data = malloc(size - 3 - frame_download.headerLength);
-        if (frame_download.data == NULL) {
-                perror("Memory allocation failed for frame_download.data");
-                ksigint();
-        }
-        memcpy(frame_download.data, &buffer[3 + frame_download.headerLength + 1], size - 3 - frame_download.headerLength - 1);
+        // frame_download.data = malloc(size - 3 - frame_download.headerLength);
+        // if (frame_download.data == NULL) {
+        //         perror("Memory allocation failed for frame_download.data");
+        //         ksigint();
+        // }
+        // memcpy(frame_download.data, &buffer[3 + frame_download.headerLength + 1], size - 3 - frame_download.headerLength - 1);
+        
 
+        Frame frame_download = dequeue(&mqDownloads);
         int chunk_id;
         memcpy(&chunk_id, frame_download.data, sizeof(chunk_id));
         chunk_id = ntohl(chunk_id); 
         // printf("Chunk id: %d\n", chunk_id);
 
-        size_t data_length = size - 3 - frame_download.headerLength - sizeof(chunk_id) - 1 - 1;
-            // printf("Data length: %ld\n", data_length);
+        size_t data_length = 256 - 3 - frame_download.headerLength - sizeof(chunk_id) - 1 - 1;
+        // printf("Data length: %ld\n", data_length);
 
         // printf("-->Frame data: ");
         // for (unsigned long int i = 0; i < data_length; ++i) {
@@ -491,7 +518,7 @@ void *downloadThread(void *args) {
 void startDownload(){
 
     freeFrame(frame);
-    frame = receiveMessage(pooleSockfd);
+    frame = dequeue(&mqDownloads);
 
     if (strcmp(frame.header, HEADER_FILE_NOT_FOUND) == 0) {
         write(1, frame.data, strlen(frame.data));
@@ -612,13 +639,25 @@ void enqueue(MessageQueue *queue, Frame frame){
 
 void* messageReceiver(void* arg) {
     int sockfd = *(int*)arg;
+
     while (1) {
         Frame newFrame = receiveMessage(sockfd); 
-        if (newFrame.type < 1 ||| newFrame.type > 6) {
+
+        if (newFrame.type < 1 || newFrame.type > 7) {
             perror("Error receiving message");
             ksigint();
+        } else if (newFrame.type == 0x02) {
+            enqueue(&mqListSongs, newFrame);
+        } else if (newFrame.type == 0x03) {
+            enqueue(&mqListPlaylists, newFrame);
+        } else if (newFrame.type == 0x04) {
+            enqueue(&mqDownloads, newFrame);
+        } else if (newFrame.type == 0x06) {
+            enqueue(&mqLogout, newFrame);
+        } else if (newFrame.type == 0x07) {
+            /// TODO: detecting erroneous frames
         }
-        enqueue(&mq, newFrame); 
+        
     }
     return NULL;
 }
@@ -955,7 +994,10 @@ int main(int argc, char *argv[]){
 
     pooleToConnect = connectToDiscovery();
 
-    initQueue(&mq);
+    initQueue(&mqDownloads);
+    initQueue(&mqLogout);
+    initQueue(&mqListSongs);
+    initQueue(&mqListPlaylists);
 
     main_menu();
     return 0;
