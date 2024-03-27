@@ -51,25 +51,17 @@ Frame frameTranslation(char message[256]){
 
     frame.headerLength = (message[2] << 8) | message[1];
 
-    frame.header = malloc(frame.headerLength + 1);
-    strncpy(frame.header, &message[3], frame.headerLength);
-    // memcpy(frame.header, &message[3], frame.headerLength);
-    // frame.header[frame.headerLength] = '\0';
+    frame.header = malloc(frame.headerLength);
+    memcpy(frame.header, &message[3], frame.headerLength);
+    frame.header[frame.headerLength] = '\0';
 
     if(strcmp(frame.header, HEADER_CON_OK) == 0 || strcmp(frame.header, HEADER_CON_KO) == 0){
         frame.data = NULL;
         return frame;
     }else{
-        frame.data = strdup(&message[3 + frame.headerLength]);
-        // frame.data = malloc(256 - (3 + frame.headerLength));
-        // memcpy(frame.data, &message[3 + frame.headerLength], 256 - (3 + frame.headerLength));
-        // frame.data[256 - (3 + frame.headerLength)] = '\0';
-
-        /*
-        int dataSize = strlen(&message[3 + frame.headerLength+1]);
-        frame.data = malloc(dataSize + 1);
-        strncpy(frame.data, &message[3 + frame.headerLength+1], dataSize);
-        frame.data[dataSize] = '\0';*/
+        frame.data = malloc(256 - 3 - frame.headerLength);
+        memcpy(frame.data, &message[3 + frame.headerLength], 256 - 3 - frame.headerLength);
+        frame.data[256 - 3 - frame.headerLength] = '\0';
     }
 
     return frame;

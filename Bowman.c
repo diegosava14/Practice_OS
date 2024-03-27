@@ -30,6 +30,17 @@ typedef struct FileDownload{
     struct FileDownload *next;
 } FileDownload;
 
+typedef struct Message{
+    Frame frame;
+    struct Message* next;
+} Message;
+
+typedef struct MessageQueue{
+    Message *front;
+    Message *rear;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+} MessageQueue;
 
 Frame frame;
 Bowman bowman;
@@ -39,11 +50,42 @@ int discoverySockfd, pooleSockfd;
 FileDownload *download_head = NULL;
 pthread_mutex_t download_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+MessageQueue mq;
+
+Frame dequeue(MessageQueue *queue){
+
+    pthread_mutex_lock(&queue->mutex);
+    while (queue->front == NULL){
+        pthread_cond_wait(&queue->cond, &queue->mutex);
+    }
+
+    Message *message = queue->front;
+    Frame frame = message->frame;
+
+    queue->front = queue->front->next;
+
+    if (queue->front == NULL){
+        queue->rear = NULL;
+    }
+    
+    free(message);
+    pthread_mutex_unlock(&queue->mutex);
+
+    return frame;
+}
 
 void ksigint(){
     write(1, "\n", 1);
 
     free(download_head);
+
+    while (mq.front != NULL) {
+        Frame frame = dequeue(&mq);
+        freeFrame(frame); 
+    }
+
+    pthread_mutex_destroy(&mq.mutex);
+    pthread_cond_destroy(&mq.cond);
 
     free(bowman.name);
     free(bowman.folder);
@@ -535,6 +577,53 @@ void startDownload(){
 /// Download functionalities end ///
 
 
+///Message Queues functionalities///
+
+void initQueue(MessageQueue *queue){
+    queue->front = NULL;
+    queue->rear = NULL;
+    pthread_mutex_init(&queue->mutex, NULL);
+    pthread_cond_init(&queue->cond, NULL);
+}
+
+
+void enqueue(MessageQueue *queue, Frame frame){
+
+    Message *newMessage = malloc(sizeof(Message));
+    if (newMessage == NULL) {
+        perror("Memory allocation failed for new message in msq");
+        ksigint();
+    }
+    newMessage->frame = frame;
+    newMessage->next = NULL;
+
+    pthread_mutex_lock(&queue->mutex);
+    if (queue->rear == NULL){
+        queue->front = newMessage;
+        queue->rear = newMessage;
+    } else {
+        queue->rear->next = newMessage;
+        queue->rear = newMessage;
+    }
+    pthread_cond_signal(&queue->cond);
+    pthread_mutex_unlock(&queue->mutex);
+}
+
+
+void* messageReceiver(void* arg) {
+    int sockfd = *(int*)arg;
+    while (1) {
+        Frame newFrame = receiveMessage(sockfd); 
+        if (newFrame.type < 1 ||| newFrame.type > 6) {
+            perror("Error receiving message");
+            ksigint();
+        }
+        enqueue(&mq, newFrame); 
+    }
+    return NULL;
+}
+///Message Queues functionalities end///
+
 
 
 void main_menu(){
@@ -595,6 +684,13 @@ void main_menu(){
             }else{
                 connected = 1;
                 pooleSockfd = connectToPoole(pooleToConnect);
+
+                pthread_t receiverThreadId;  //start the message receiving
+                if (pthread_create(&receiverThreadId, NULL, messageReceiver, (void*)&pooleSockfd) != 0) {
+                    perror("Failed to create the message receiver thread");
+                    exit(EXIT_FAILURE);
+                }
+                pthread_detach(receiverThreadId);
 
                 sendMessage(pooleSockfd, 0x01, strlen(HEADER_NEW_BOWMAN), HEADER_NEW_BOWMAN, bowman.name);
 
@@ -858,6 +954,8 @@ int main(int argc, char *argv[]){
     readBowmanFile(argv[1]);
 
     pooleToConnect = connectToDiscovery();
+
+    initQueue(&mq);
 
     main_menu();
     return 0;

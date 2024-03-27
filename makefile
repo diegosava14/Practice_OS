@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
-CFLAGS_THREADS = -Wall -Wextra -pthread
+CFLAGS_THREADS = -Wall -Wextra -lpthread
 
 all: Bowman Poole Discovery	
 	rm -Rf .git

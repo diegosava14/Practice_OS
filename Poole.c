@@ -328,20 +328,9 @@ void* downloadThread(void* args){
         // printf("\n");
     }
 
-   ///File reading and message sending///
+   ///File reading and message sending end///
 
-    // Frame recieveCheck = receiveMessage(arguments->sockfd);  // (ERRASE LATER) gets confiramtion that the file is recieved well
-    // char b[256];
-    // strcpy(b, arguments->file_path);
-    // if (strcmp(recieveCheck.header, HEADER_CHECK_OK) == 0){
-    //     write(1, "File sent successfully\n", 24);
-    //     write(1, b, strlen(b));
-    // } else {
-    //     write(1, "Error sending file\n", 20);
-    //     write(1, b, strlen(b));
-    // }
-    // write(1, "\n\n", 2);  //Errase later (end)
-
+   
     close(fd);
     free(arguments->file_path);
     free(arguments);
@@ -479,11 +468,14 @@ void handleFrames(Frame frame, int sockfd){
         
     } else if (strcmp(frame.header, HEADER_CHECK_OK) == 0 || strcmp(frame.header, HEADER_CHECK_KO) == 0) {
 
+        /// Not needed for output?? ///
         if (strcmp(frame.header, HEADER_CHECK_OK) == 0){
             write(1, "File sent successfully\n", 24);
         } else {
             write(1, "Error sending file\n", 20);
         }
+        /////////////////////////////
+
     }
 }
 
